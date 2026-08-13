@@ -1,0 +1,76 @@
+name: UltraBass9000
+
+options:
+  bundleIdPrefix: com.nelitojr
+  createIntermediateGroups: true
+  deploymentTarget:
+    macOS: "26.0"
+  groupSortPosition: top
+
+settings:
+  base:
+    # Swift 5 language mode, deliberately. Core Audio IOProcs are C callbacks over
+    # unsafe pointers touching mutable state from a real-time thread; Swift 6 strict
+    # concurrency cannot model that without pervasive `nonisolated(unsafe)` noise.
+    # Revisit once the audio graph is stable (tracked in ROADMAP Phase 5).
+    SWIFT_VERSION: "5.0"
+    MACOSX_DEPLOYMENT_TARGET: "26.0"
+    CODE_SIGN_STYLE: Automatic
+    # A real signing identity is not optional here. Ad-hoc signed builds run, but TCC never
+    # prompts for audio capture and the process tap silently returns nothing but zeros.
+    DEVELOPMENT_TEAM: YUU5HHCFJD
+    ENABLE_HARDENED_RUNTIME: YES
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+    DEAD_CODE_STRIPPING: YES
+    CLANG_ENABLE_MODULES: YES
+    GCC_WARN_UNUSED_VARIABLE: YES
+    SWIFT_TREAT_WARNINGS_AS_ERRORS: NO
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+
+targets:
+  UltraBass9000:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources/UltraBass9000
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.nelitojr.UltraBass9000
+        PRODUCT_NAME: UltraBass9000
+        INFOPLIST_FILE: Sources/UltraBass9000/Resources/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Sources/UltraBass9000/Resources/UltraBass9000.entitlements
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ENABLE_PREVIEWS: YES
+        SWIFT_EMIT_LOC_STRINGS: YES
+    dependencies:
+      - sdk: CoreAudio.framework
+      - sdk: AudioToolbox.framework
+      - sdk: AVFoundation.framework
+      - sdk: Accelerate.framework
+
+  UltraBass9000Tests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests/UltraBass9000Tests
+    dependencies:
+      - target: UltraBass9000
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.nelitojr.UltraBass9000Tests
+        GENERATE_INFOPLIST_FILE: YES
+
+schemes:
+  UltraBass9000:
+    build:
+      targets:
+        UltraBass9000: all
+        UltraBass9000Tests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: true
+      targets:
+        - UltraBass9000Tests

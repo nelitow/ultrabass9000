@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Unsandboxed: creating and owning aggregate audio devices, enumerating every
+	     hardware device, and (later) installing a CGEventTap for the volume keys are
+	     all outside the App Sandbox. Distribution is out of scope, so this is fine.
+	     If sandboxing is ever needed, taps require com.apple.security.device.audio-input. -->
+	<key>com.apple.security.app-sandbox</key>
+	<false/>
+
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+</dict>
+</plist>
