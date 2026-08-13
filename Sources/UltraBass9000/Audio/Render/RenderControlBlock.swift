@@ -58,6 +58,9 @@ final class RenderControlBlock {
     let delays = DelayBank()
     /// Scheduled test tones for acoustic alignment. Takes over the output while it runs.
     let calibration = CalibrationPlayer()
+    /// Repeating test transient, played in place of the tapped audio to hear whether alignment
+    /// worked. Runs through the per-device chain rather than around it.
+    let beat = BeatPlayer()
 
     init() {
         masterGain = .allocate(capacity: 1)

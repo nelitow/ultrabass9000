@@ -65,6 +65,36 @@ enum SyncSignal {
         }
     }
 
+    /// Corner of the high-pass applied before correlating for arrival time.
+    ///
+    /// The played sweep starts at 30 Hz so the response measurement covers the bass, but low
+    /// frequencies are exactly what a room smears: they arrive slowly, reflect strongly, and blunt
+    /// the correlation peak that timing depends on. Widening the sweep for the response measurably
+    /// degraded the timing one, so the two now look at different parts of the same recording.
+    /// Timing uses only the part above this corner, where the transient is sharp.
+    static let timingHighPassFrequency: Double = 250
+
+    /// Band-limits a signal for arrival detection. Applied identically to the reference and the
+    /// recording, so it shifts both by the same amount and cancels out of the difference.
+    static func bandLimitedForTiming(_ samples: [Float], sampleRate: Double) -> [Float] {
+        let chain = BiquadDesign.highPassCascade(frequency: timingHighPassFrequency,
+                                                 order: 4,
+                                                 sampleRate: sampleRate)
+        var output = samples
+        for coefficients in chain {
+            var z1: Float = 0
+            var z2: Float = 0
+            for index in output.indices {
+                let x = output[index]
+                let y = coefficients.b0 * x + z1
+                z1 = coefficients.b1 * x - coefficients.a1 * y + z2
+                z2 = coefficients.b2 * x - coefficients.a2 * y
+                output[index] = y
+            }
+        }
+        return output
+    }
+
     // MARK: - Arrival detection
 
     struct Detection: Equatable {

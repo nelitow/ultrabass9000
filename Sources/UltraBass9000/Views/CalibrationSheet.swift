@@ -73,7 +73,10 @@ struct CalibrationFlowView: View {
             explanationRow(
                 icon: "waveform",
                 text: "Each of your \(deviceCount) selected \(deviceCount == 1 ? "output" : "outputs")"
-                    + " plays a short sweep in turn while the built-in microphone listens."
+                    + " plays a short sweep in turn while the built-in microphone listens. The whole"
+                    + " sequence runs three times and the results are combined, so one noisy moment"
+                    + " does not decide the answer. Expect it to take around"
+                    + " \(Int((Double(deviceCount) * 3 * 1.5 + 2.5).rounded())) seconds."
             )
             explanationRow(
                 icon: "figure.stand",
@@ -118,7 +121,7 @@ struct CalibrationFlowView: View {
 
     private func measuringContent(deviceName: String, index: Int, total: Int) -> some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
-            stageStatus(title: "Measuring \(deviceName)", detail: "Device \(index) of \(total). Stay quiet and still.")
+            stageStatus(title: "Measuring \(deviceName)", detail: "Sweep \(index) of \(total). Stay quiet and still.")
             // `index` is 1-based and counts the device currently playing, so the bar reaches full
             // only while the *last* device's sweep is in flight, not once it's actually done —
             // acceptable imprecision for a few-second, few-device measurement.

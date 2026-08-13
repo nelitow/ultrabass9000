@@ -23,9 +23,13 @@ struct ResponsePoint: Equatable, Identifiable {
 /// speaker.
 enum ResponseAnalyzer {
 
-    /// Resolution of the reported curve. Sixth-octave is fine enough to show a crossover point and
-    /// coarse enough to hide the comb filtering that any single microphone position produces.
-    static let bandsPerOctave = 6
+    /// Resolution of the reported curve.
+    ///
+    /// Twelfth-octave, which is fine enough to show the shape of a crossover rather than just its
+    /// existence. It is also fine enough to show the comb filtering that any single microphone
+    /// position produces, which is why the measurement is averaged over several passes before it
+    /// reaches this resolution: without that, the extra detail would mostly be extra noise.
+    static let bandsPerOctave = 12
     static let lowestFrequency: Double = 40
     static let highestFrequency: Double = 12_000
 

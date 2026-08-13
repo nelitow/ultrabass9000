@@ -274,6 +274,12 @@ extension AggregateOutput {
         let waveforms = control.waveforms
         let delays = control.delays
 
+        // The beat replaces the tapped audio rather than mixing with it, so what is being judged is
+        // one transient on every device and not a transient buried in whatever was playing.
+        let beat = control.beat
+        let beatIsActive = beat.isActive.pointee == 1
+        let beatBase = Int(beat.position.pointee)
+
         for bufferIndex in 0..<outputBuffers.count {
             let buffer = outputBuffers[bufferIndex]
             guard let outputData = buffer.mData, buffer.mNumberChannels > 0 else { continue }
@@ -307,8 +313,16 @@ extension AggregateOutput {
                 // A vanishingly small offset keeps the filter state out of denormal range. Denormal
                 // arithmetic can cost tens of times a normal multiply, which on a real-time thread
                 // shows up as dropouts rather than as slowness.
-                var left = tapSamples[inBase] + 1e-20
-                var right = tapChannels > 1 ? tapSamples[inBase + 1] + 1e-20 : left
+                var left: Float
+                var right: Float
+                if beatIsActive {
+                    let hit = BeatPlayer.sample(at: beatBase + frame, player: beat)
+                    left = hit + 1e-20
+                    right = hit + 1e-20
+                } else {
+                    left = tapSamples[inBase] + 1e-20
+                    right = tapChannels > 1 ? tapSamples[inBase + 1] + 1e-20 : left
+                }
 
                 FilterBank.processFrame(left: &left,
                                         right: &right,
@@ -351,6 +365,12 @@ extension AggregateOutput {
                devicePeak > control.peaks[deviceIndex] {
                 control.peaks[deviceIndex] = devicePeak
             }
+        }
+
+        // Advanced once for the whole callback. Every output device just rendered the same span of
+        // the same beat.
+        if beatIsActive {
+            beat.position.pointee = Int32((beatBase + tapFrames) % max(Int(beat.periodFrames.pointee), 1))
         }
     }
 

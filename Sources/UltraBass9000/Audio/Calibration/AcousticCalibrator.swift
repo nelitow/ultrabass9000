@@ -75,6 +75,13 @@ final class AcousticCalibrator {
     static let gapSeconds: Double = 1.5
     /// Silence before the first sweep, so the recorder is certainly running and settled.
     static let leadInSeconds: Double = 0.6
+    /// How many times the whole device sequence is played.
+    ///
+    /// One pass is enough to find an arrival time. It is not enough for a frequency response: a
+    /// single microphone position in a real room produces comb filtering, and a passing noise ruins
+    /// exactly one sweep. Three passes combined by median throw out the ruined one instead of
+    /// averaging it in.
+    static let passes = 3
 
     private let logger = Logger(subsystem: "com.nelitojr.UltraBass9000", category: "Calibration")
     private let control: RenderControlBlock
@@ -126,8 +133,9 @@ final class AcousticCalibrator {
 
         let leadInFrames = Int(Self.leadInSeconds * playbackSampleRate)
         let gapFrames = Int(Self.gapSeconds * playbackSampleRate)
+        let sweepCount = devices.count * Self.passes
         let programSeconds = Self.leadInSeconds
-            + Double(devices.count - 1) * Self.gapSeconds
+            + Double(sweepCount - 1) * Self.gapSeconds
             + Self.sweepDuration + Self.gapSeconds
 
         let recorder = try MicrophoneRecorder(deviceID: inputDeviceID,
@@ -154,8 +162,10 @@ final class AcousticCalibrator {
             throw CalibrationError.noDevicesToMeasure
         }
 
+        // Every device, `passes` times over, in the same order each pass.
+        let sequence = (0..<Self.passes).flatMap { _ in Array(devices.indices) }
         let segments = control.calibration.schedule(sweep: playbackSweep,
-                                                    deviceIndices: Array(devices.indices),
+                                                    deviceIndices: sequence,
                                                     gapFrames: gapFrames,
                                                     leadInFrames: leadInFrames)
         guard !segments.isEmpty else { throw CalibrationError.noDevicesToMeasure }
@@ -195,8 +205,14 @@ final class AcousticCalibrator {
 
             let position = Int(control.calibration.position.pointee)
             while announced < segments.count, position >= segments[announced].startFrame {
+                // Index `devices` through the segment, never through the sweep counter. With
+                // several passes there are more sweeps than devices, and treating the two as the
+                // same number reads past the end of the device list.
+                let deviceIndex = segments[announced].deviceIndex
                 announced += 1
-                onProgress(announced, devices[announced - 1].name)
+                if devices.indices.contains(deviceIndex) {
+                    onProgress(announced, devices[deviceIndex].name)
+                }
             }
             try await Task.sleep(for: .milliseconds(50))
         }
@@ -249,6 +265,37 @@ final class AcousticCalibrator {
         }
     }
 
+    // MARK: - Combining passes
+
+    static func median<T: Comparable>(_ values: [T]) -> T? {
+        guard !values.isEmpty else { return nil }
+        let sorted = values.sorted()
+        return sorted[sorted.count / 2]
+    }
+
+    /// Median across passes, band by band.
+    ///
+    /// Every pass uses the same reference sweep, so every pass reports the same band centres and the
+    /// curves line up index for index. Bands are matched by frequency anyway rather than by
+    /// position, so a pass that dropped a band cannot silently shift the rest.
+    static func medianResponse(_ curves: [[ResponsePoint]]) -> [ResponsePoint] {
+        let usable = curves.filter { !$0.isEmpty }
+        guard let first = usable.first else { return [] }
+        guard usable.count > 1 else { return first }
+
+        var byFrequency: [Double: [Double]] = [:]
+        for curve in usable {
+            for point in curve {
+                byFrequency[point.frequency, default: []].append(point.decibels)
+            }
+        }
+        return first.compactMap { point in
+            guard let values = byFrequency[point.frequency],
+                  let value = median(values) else { return nil }
+            return ResponsePoint(frequency: point.frequency, decibels: value)
+        }
+    }
+
     // MARK: - Analysis
 
     /// Correlates each device's search window and turns the arrivals into delays.
@@ -264,6 +311,8 @@ final class AcousticCalibrator {
                  gapFrames: Int) -> Outcome {
         let rateRatio = captureSampleRate / playbackSampleRate
         let windowFrames = Int(Double(gapFrames) * rateRatio)
+        // Timing correlates against the band-limited sweep; the response still uses the full one.
+        let timingReference = SyncSignal.bandLimitedForTiming(reference, sampleRate: captureSampleRate)
 
         var relativeLatencies: [Double?] = []
         var confidences: [Float] = []
@@ -280,7 +329,8 @@ final class AcousticCalibrator {
             }
 
             let window = Array(capture[windowStart..<windowEnd])
-            guard let detection = SyncSignal.findOffset(reference: reference, in: window) else {
+            let timingWindow = SyncSignal.bandLimitedForTiming(window, sampleRate: captureSampleRate)
+            guard let detection = SyncSignal.findOffset(reference: timingReference, in: timingWindow) else {
                 relativeLatencies.append(nil)
                 confidences.append(0)
                 responses.append([])
@@ -315,33 +365,52 @@ final class AcousticCalibrator {
             }
         }
 
-        // Only trusted measurements take part in the alignment. A device that was not heard must
-        // not drag every other device's delay with it.
-        var trustedIndices: [Int] = []
-        var trustedLatencies: [Double] = []
-        for index in relativeLatencies.indices {
-            if let latency = relativeLatencies[index],
-               confidences[index] >= SyncSignal.confidenceThreshold {
-                trustedIndices.append(index)
-                trustedLatencies.append(latency)
+        // Collapse the passes. Each device was swept `passes` times, so there are several
+        // measurements per device and one result is wanted.
+        //
+        // Median rather than mean throughout. The failure mode of a room measurement is not gentle
+        // noise on every pass, it is one pass wrecked by a cough, a chair, or a notification. A mean
+        // folds that in; a median discards it.
+        var perDeviceLatency: [Int: Double] = [:]
+        var perDeviceConfidence: [Int: Float] = [:]
+        var perDeviceResponse: [Int: [ResponsePoint]] = [:]
+
+        for deviceIndex in devices.indices {
+            let passes = segments.indices.filter { segments[$0].deviceIndex == deviceIndex }
+            guard !passes.isEmpty else { continue }
+
+            perDeviceConfidence[deviceIndex] = Self.median(passes.map { confidences[$0] }) ?? 0
+
+            let trusted = passes.filter { confidences[$0] >= SyncSignal.confidenceThreshold }
+            if let latency = Self.median(trusted.compactMap { relativeLatencies[$0] }) {
+                perDeviceLatency[deviceIndex] = latency
             }
+            perDeviceResponse[deviceIndex] = Self.medianResponse(trusted.map { responses[$0] })
         }
 
+        // Only devices heard confidently take part in the alignment. One that was not heard must
+        // not drag every other device's delay with it.
+        let alignedIndices = devices.indices.filter {
+            perDeviceLatency[$0] != nil
+                && (perDeviceConfidence[$0] ?? 0) >= SyncSignal.confidenceThreshold
+        }
+        let trustedLatencies = alignedIndices.compactMap { perDeviceLatency[$0] }
         let alignment = SyncSignal.alignmentDelays(relativeLatencies: trustedLatencies)
-        var delayByIndex: [Int: Double] = [:]
-        for (position, index) in trustedIndices.enumerated() {
-            delayByIndex[index] = alignment[position]
+
+        var delayByDevice: [Int: Double] = [:]
+        for (position, deviceIndex) in alignedIndices.enumerated() {
+            delayByDevice[deviceIndex] = alignment[position]
         }
 
         var measurements: [Measurement] = []
-        for (index, segment) in segments.enumerated() {
-            let device = devices[segment.deviceIndex]
+        for deviceIndex in devices.indices {
+            let device = devices[deviceIndex]
             measurements.append(Measurement(uid: device.uid,
                                             deviceName: device.name,
-                                            confidence: confidences[index],
-                                            relativeLatencySeconds: relativeLatencies[index] ?? 0,
-                                            delaySeconds: delayByIndex[index] ?? 0,
-                                            response: responses[index]))
+                                            confidence: perDeviceConfidence[deviceIndex] ?? 0,
+                                            relativeLatencySeconds: perDeviceLatency[deviceIndex] ?? 0,
+                                            delaySeconds: delayByDevice[deviceIndex] ?? 0,
+                                            response: perDeviceResponse[deviceIndex] ?? []))
         }
 
         let spread = (trustedLatencies.max() ?? 0) - (trustedLatencies.min() ?? 0)

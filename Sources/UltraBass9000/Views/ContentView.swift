@@ -62,6 +62,7 @@ struct ContentView: View {
                 startStopButton
                 Spacer(minLength: DesignSystem.Spacing.lg)
                 syncControl
+                beatButton
                 autoSyncButton
                 responseButton
                 masterGainControl
@@ -175,6 +176,24 @@ struct ContentView: View {
             Label("Auto-Sync", systemImage: "waveform.and.mic")
         }
         .buttonStyle(.bordered)
+    }
+
+    /// Plays a repeating transient on every output at once, so alignment can be checked by ear.
+    /// Aligned devices sound like one hit. Misaligned ones sound like a slap echo, which is much
+    /// easier to hear than to read off a number.
+    private var beatButton: some View {
+        Button {
+            engine.toggleBeat()
+        } label: {
+            Label(engine.isBeatPlaying ? "Stop Beat" : "Beat",
+                  systemImage: engine.isBeatPlaying ? "stop.circle.fill" : "metronome")
+        }
+        .buttonStyle(.bordered)
+        .tint(engine.isBeatPlaying ? DesignSystem.Colors.accent : nil)
+        .disabled(engine.status != .running)
+        .help(engine.status == .running
+              ? "Play a test beat on every output to hear whether they are aligned. Replaces the audio while it runs."
+              : "Start playback first.")
     }
 
     /// Opens the measured-response chart. Disabled rather than hidden when there's nothing to

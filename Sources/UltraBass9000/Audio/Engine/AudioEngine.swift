@@ -353,12 +353,39 @@ final class AudioEngine {
         }
     }
 
+    // MARK: - Test beat
+
+    /// Plays a repeating transient on every device at once, so alignment can be judged by ear.
+    ///
+    /// Numbers say the devices are 4 ms apart. This says whether that sounds like one hit or two,
+    /// which is the question actually being asked.
+    private(set) var isBeatPlaying = false
+
+    func toggleBeat() {
+        isBeatPlaying ? stopBeat() : startBeat()
+    }
+
+    func startBeat() {
+        guard status == .running, !isBeatPlaying else { return }
+        control.beat.load(waveform: TestBeat.waveform(sampleRate: sampleRate), sampleRate: sampleRate)
+        control.beat.start()
+        isBeatPlaying = true
+    }
+
+    func stopBeat() {
+        control.beat.stop()
+        isBeatPlaying = false
+    }
+
     // MARK: - Acoustic calibration
 
     private(set) var calibration: CalibrationState = .idle
 
     func startCalibration() {
         guard !calibration.isRunning else { return }
+        // Calibration takes over the output entirely; a beat still running would be measured as
+        // part of the room.
+        stopBeat()
         guard let plan else {
             calibration = .failed(AcousticCalibrator.CalibrationError.engineNotRunning.localizedDescription)
             return
@@ -468,6 +495,7 @@ final class AudioEngine {
     }
 
     func stop() {
+        stopBeat()
         shutdownPipeline()
         control.resetMeters()
         peakLevels = [:]
