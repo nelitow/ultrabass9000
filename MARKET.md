@@ -7,10 +7,10 @@ that turned up nothing under that name.
 
 ## The plain answer
 
-No macOS tool does what UltraBass 9000 does, but the reason isn't that the DSP is exotic. Per-output
-EQ, crossover filters, and delay all exist elsewhere on macOS today. Ginger Audio's GroundControl
-SPHERE puts an AU plugin slot and a delay line, accurate to 0.01 ms, on every channel it sees.
-CamillaDSP does the same processing for free, on macOS, Linux, and Windows.
+Per-output EQ, crossover filters, and delay all exist on macOS today. The combination UltraBass 9000
+ships does not, at least not under one roof. Ginger Audio's GroundControl SPHERE puts an AU plugin slot
+and a delay line, accurate to 0.01 ms, on every channel it sees. CamillaDSP does the same processing for
+free, on macOS, Linux, and Windows.
 
 What's missing is the combination of three things at once: automatic system-wide capture (every app,
 with zero routing setup), independently-clocked physical output devices rather than channels of one

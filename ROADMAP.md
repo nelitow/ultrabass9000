@@ -164,7 +164,7 @@ These are the same code shape: a per-device processor chain over a channel range
 
 **Done when:** F11/F12 moves all outputs together and your HUD shows instead of Apple's.
 
-### Phase 4 — Delay synchronization (1–2 weeks, the real work)
+### Phase 4 — Delay synchronization ✅ done (2026-08-13)
 
 1. **Free part:** clock drift is already handled by the aggregate's drift compensation. Verify with a
    1 kHz tone across a wired + USB pair over 30 minutes.
@@ -190,6 +190,10 @@ These are the same code shape: a per-device processor chain over a channel range
 ---
 
 ## 4. Total
+
+> Phases 0, 1, 2 and 4 are done. Phase 3 (volume keys) and Phase 5 (polish) remain. Acoustic
+> auto-sync and measured frequency response were added during Phase 4 and are not in the original
+> table below.
 
 | Phase | Effort |
 |---|---|
