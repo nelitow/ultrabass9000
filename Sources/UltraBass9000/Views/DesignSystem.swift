@@ -41,7 +41,12 @@ enum DesignSystem {
     // MARK: - Metrics
 
     enum Metrics {
-        static let stripWidth: CGFloat = 112
+        /// Strips divide the available width evenly, never going below this. Past that point the
+        /// mixer scrolls horizontally instead of squeezing the fader into something unusable.
+        static let stripMinWidth: CGFloat = 116
+        /// Reserved for the device name so every strip's controls line up, whether the name wraps
+        /// to one line or two.
+        static let stripTitleHeight: CGFloat = 34
         static let sidebarWidth: CGFloat = 260
         static let meterWidth: CGFloat = 14
         static let cornerRadius: CGFloat = 16

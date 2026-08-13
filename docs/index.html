@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>UltraBass 9000 — multi-output audio control for macOS</title>
-<meta name="description" content="Send system audio to several devices at once, each with independent volume, EQ, filters, delay, and acoustic auto-sync. Free and open source, macOS 26+.">
+<title>UltraBass 9000: multi-output audio control for macOS</title>
+<meta name="description" content="Send system audio to several devices at once. Each output gets its own volume, EQ, filters, delay, and acoustic sync. Free, open source, for macOS 26 and up.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23151822'/%3E%3Ccircle cx='16' cy='16' r='6.5' fill='%2352d8d0'/%3E%3C/svg%3E">
 
 <link rel="stylesheet" href="nelitomorphism/tokens/fonts-local.css">
@@ -41,13 +41,12 @@
     <div class="wrap hero__grid">
       <div>
         <span class="badge badge--accent"><span class="badge__dot"></span>macOS 26+ · free &amp; open source</span>
-        <h1>One Mac. Every output. Tuned independently.</h1>
+        <h1>One Mac, every output, tuned on its own.</h1>
         <p class="hero__sub">
-          UltraBass 9000 sends your system audio to as many devices as you choose, at the same time —
-          each with its own volume, 5&#8209;band EQ, filters, and delay. macOS's built-in Multi-Output
-          Device can only send the identical signal to more than one output; it can't shape or align any
-          of them per device. UltraBass 9000 does both, with no driver, no kernel extension, and no
-          installer.
+          UltraBass 9000 sends your system audio to as many devices as you pick, all at once. Each one
+          gets its own volume, 5&#8209;band EQ, filters, and delay. macOS's built-in Multi-Output Device
+          sends the same signal to every output and can't shape or align any of them. This does both. No
+          driver. No kernel extension.
         </p>
         <div class="hero__ctas">
           <a class="btn btn--primary btn--lg" href="#build">Build from source</a>
@@ -98,17 +97,17 @@ brew install xcodegen
 xcodegen generate
 open UltraBass9000.xcodeproj</code></pre>
           </div>
-          <p class="build__then">Then press <kbd class="kbd">⌘R</kbd> in Xcode to build, sign, and run it.</p>
+          <p class="build__then">Then hit <kbd class="kbd">⌘R</kbd> in Xcode.</p>
           <p class="hero__meta">Requires macOS 26 or later, Xcode 26.x, and XcodeGen.</p>
         </div>
         <div class="note-card">
           <span class="note-card__mark">Why no download</span>
           <p>
-            There's no downloadable build yet, and that's deliberate: macOS only grants the microphone
-            permission this app needs to properly signed apps. An unsigned download would open normally
-            and capture nothing — worse than not shipping one at all. Signed releases need an Apple
-            Developer ID; until then, building it yourself is the way. Xcode signs the app with your own
-            developer identity automatically, so permissions work exactly as they should.
+            There's no downloadable build yet. That's on purpose: macOS only grants microphone access to
+            signed builds. An unsigned download would launch fine and record nothing, which is worse than
+            not shipping it at all. A signed release needs an Apple Developer ID, and that's not set up
+            yet. Build it yourself for now. Xcode signs the app with your own developer identity when you
+            hit Run, so the permission prompt shows up the way it's supposed to.
           </p>
         </div>
       </div>
@@ -128,31 +127,31 @@ open UltraBass9000.xcodeproj</code></pre>
           <div class="card__title">Routing</div>
           <div class="card__body">
             <h3>Multi-output routing</h3>
-            <p>Send system audio to any number of devices simultaneously. No driver, no kernel extension, no installer.</p>
+            <p>Pick any number of outputs, and audio goes to all of them at once. No kernel extension, no separate driver.</p>
           </div>
         </div>
 
         <div class="card feature-card">
           <div class="card__title">Equalizer</div>
           <div class="card__body">
-            <h3>Per-device 5-band EQ</h3>
-            <p>Three peak bands plus low and high shelf, per device, with a response curve you drag directly.</p>
+            <h3>Five-band EQ, per output</h3>
+            <p>Three peak filters plus a low shelf and a high shelf. Drag the curve directly and the sound changes as you move it.</p>
           </div>
         </div>
 
         <div class="card feature-card">
           <div class="card__title">Filters</div>
           <div class="card__body">
-            <h3>Per-device filters</h3>
-            <p>High-pass, low-pass, and band-pass, per device, in series with the EQ.</p>
+            <h3>High-pass, low-pass, band-pass</h3>
+            <p>Each one runs in series with that device's EQ, so the response curve on one output can look nothing like the next.</p>
           </div>
         </div>
 
         <div class="card feature-card">
           <div class="card__title">Delay</div>
           <div class="card__body">
-            <h3>Per-device delay</h3>
-            <p>Hold faster devices back in time so audio from every output arrives together.</p>
+            <h3>Delay compensation</h3>
+            <p>Delay the faster devices so sound from every speaker lands at the same moment.</p>
           </div>
         </div>
 
@@ -161,8 +160,8 @@ open UltraBass9000.xcodeproj</code></pre>
           <div class="card__body">
             <h3>Acoustic auto-sync</h3>
             <p>
-              Plays a sweep from each device in turn, listens back on the built-in microphone, and computes
-              the alignment automatically. Measured repeatability on real hardware:
+              Plays a sweep through each device in turn and listens back on the built-in microphone. From
+              that, it works out the alignment on its own. Measured on real hardware, it repeats to within
               <span class="stat">~0.2&nbsp;ms</span>.
             </p>
             <a class="src-link" href="https://github.com/nelitow/ultrabass9000/blob/8d1de383d31eeab65042bbe2b678ddecccab08c5/Sources/UltraBass9000/Audio/Calibration/AcousticCalibrator.swift#L100">AcousticCalibrator.swift:100 ↗</a>
@@ -172,8 +171,8 @@ open UltraBass9000.xcodeproj</code></pre>
         <div class="card feature-card">
           <div class="card__title">Metering</div>
           <div class="card__body">
-            <h3>Live waveform &amp; metering</h3>
-            <p>See what's actually playing on every output, per device, in real time.</p>
+            <h3>Live waveform and metering</h3>
+            <p>Shows exactly what's playing on each output, live.</p>
           </div>
         </div>
 
@@ -193,9 +192,8 @@ open UltraBass9000.xcodeproj</code></pre>
           <div class="step__index">01</div>
           <h3>Tap</h3>
           <p>
-            UltraBass 9000 quietly copies the audio your Mac is already playing, right as it leaves each
-            app, using a macOS process tap. Nothing is muted or interrupted — every app keeps playing
-            normally.
+            UltraBass 9000 copies the audio your Mac is already playing, right as it leaves each app,
+            using a macOS process tap. Nothing gets muted. Every app keeps playing like normal.
           </p>
           <a class="src-link" href="https://github.com/nelitow/ultrabass9000/blob/8d1de383d31eeab65042bbe2b678ddecccab08c5/Sources/UltraBass9000/Audio/Capture/ProcessTap.swift#L28">ProcessTap.swift:28 ↗</a>
         </div>
@@ -203,16 +201,17 @@ open UltraBass9000.xcodeproj</code></pre>
           <div class="step__index">02</div>
           <h3>Route</h3>
           <p>
-            That copy feeds a private aggregate device the app builds behind the scenes, wired to
-            whichever outputs you've picked. It exists only while UltraBass 9000 is running.
+            That copy feeds a private aggregate device, built behind the scenes and wired to whichever
+            outputs you picked. It only exists while UltraBass 9000 is running.
           </p>
         </div>
         <div class="step">
           <div class="step__index">03</div>
           <h3>Shape</h3>
           <p>
-            Each output gets its own path — delay, then EQ, then filters — before the sound reaches that
-            speaker, so every device can be tuned on purpose instead of playing an identical signal.
+            Each output gets its own path: delay, then EQ, then filters, before the sound reaches that
+            speaker. Every device ends up tuned on purpose, instead of playing the same signal as the
+            rest.
           </p>
           <a class="src-link" href="https://github.com/nelitow/ultrabass9000/blob/8d1de383d31eeab65042bbe2b678ddecccab08c5/Sources/UltraBass9000/Audio/Render/AggregateOutput.swift#L207">AggregateOutput.swift:207 ↗</a>
         </div>
@@ -229,7 +228,7 @@ open UltraBass9000.xcodeproj</code></pre>
       <div class="shots-grid">
         <figure class="shot-frame-wrap">
           <div class="shot-frame">
-            <img src="assets/screenshot-mixer.png" width="2294" height="1528" loading="lazy" alt="UltraBass 9000 mixer window showing two active outputs — MacBook Pro speakers and a Dell monitor — running with a 3.8 ms sync offset applied, live waveforms, and per-device meters.">
+            <img src="assets/screenshot-mixer.png" width="2294" height="1528" loading="lazy" alt="UltraBass 9000 mixer window showing two active outputs, MacBook Pro speakers and a Dell monitor, running with a 3.8 ms sync offset, live waveforms, and per-device meters.">
           </div>
           <figcaption class="shot-caption">
             Two outputs running together, synced with a +3.8&nbsp;ms offset, each with its own live
@@ -238,11 +237,11 @@ open UltraBass9000.xcodeproj</code></pre>
         </figure>
         <figure class="shot-frame-wrap">
           <div class="shot-frame">
-            <img src="assets/screenshot-eq.png" width="1760" height="1200" loading="lazy" alt="UltraBass 9000 EQ view showing two devices with different response curves — a high-pass filter on one output and a low-pass filter on the other, each in series with that device's EQ.">
+            <img src="assets/screenshot-eq.png" width="1760" height="1200" loading="lazy" alt="UltraBass 9000 EQ view showing two devices with different response curves: a high-pass filter on one output, a low-pass filter on the other, each running in series with that device's EQ.">
           </div>
           <figcaption class="shot-caption">
-            Each device's own response curve — EQ in series with a filter, drawn live — with a
-            high-pass on one output and a low-pass on the other.
+            Each device gets its own response curve, EQ in series with a filter, drawn live. High-pass
+            on one output, low-pass on the other.
           </figcaption>
         </figure>
       </div>
@@ -253,7 +252,7 @@ open UltraBass9000.xcodeproj</code></pre>
     <div class="wrap cta-band__inner">
       <div>
         <h2>Free, open source, macOS 26+</h2>
-        <p>No binary yet — clone it, generate the Xcode project, and run it.</p>
+        <p>No binary yet. Clone it, generate the Xcode project, and run it.</p>
       </div>
       <div class="cta-band__actions">
         <a class="btn btn--primary" href="#build">Build from source</a>

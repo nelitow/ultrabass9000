@@ -23,7 +23,7 @@ struct DeviceStrip: View {
             processingSection
         }
         .padding(DesignSystem.Spacing.sm)
-        .frame(width: DesignSystem.Metrics.stripWidth)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .materialPanel(cornerRadius: DesignSystem.Metrics.cornerRadius)
     }
 
@@ -48,6 +48,9 @@ struct DeviceStrip: View {
                 .font(DesignSystem.Typography.stripLabel)
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
+                // Fixed height, so a name that wraps to two lines does not push its whole strip
+                // down relative to the one beside it. Every fader starts at the same y.
+                .frame(height: DesignSystem.Metrics.stripTitleHeight, alignment: .top)
                 .frame(maxWidth: .infinity)
         }
     }
@@ -60,7 +63,9 @@ struct DeviceStrip: View {
             GainFader(gain: gainBinding)
                 .opacity(engine.isMuted(device.uid) ? 0.4 : 1)
         }
-        .frame(height: 200)
+        // The fader takes whatever vertical space the strip has left, so strips reach the bottom of
+        // the window instead of stopping at a fixed height with a gap beneath them.
+        .frame(minHeight: 160, maxHeight: .infinity)
     }
 
     private var gainBinding: Binding<Float> {

@@ -167,17 +167,50 @@ struct ContentView: View {
             if engine.activeDevices.isEmpty {
                 emptyState
             } else {
-                ScrollView(.horizontal) {
-                    HStack(alignment: .top, spacing: DesignSystem.Spacing.md) {
-                        ForEach(Array(engine.activeDevices.enumerated()), id: \.element.uid) { index, device in
-                            DeviceStrip(device: device, isClock: index == 0)
-                        }
-                    }
-                    .padding(DesignSystem.Spacing.lg)
-                }
+                mixerStrips
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// Strips divide the available width and fill the height, and only start scrolling once there
+    /// are more devices than fit at the minimum width.
+    ///
+    /// The width has to be measured rather than expressed as `maxWidth: .infinity` inside a
+    /// horizontal `ScrollView`. A scroll view offers its content unbounded width along its scroll
+    /// axis, so "as wide as possible" resolves to the content's ideal size and every strip collapses
+    /// to its minimum with the remaining space left blank beside it.
+    private var mixerStrips: some View {
+        GeometryReader { proxy in
+            let devices = engine.activeDevices
+            let padding = DesignSystem.Spacing.lg * 2
+            let gaps = CGFloat(max(devices.count - 1, 0)) * DesignSystem.Spacing.md
+            let required = CGFloat(devices.count) * DesignSystem.Metrics.stripMinWidth + gaps
+            let fits = required <= proxy.size.width - padding
+
+            Group {
+                if fits {
+                    strips(devices, width: nil)
+                } else {
+                    ScrollView(.horizontal) {
+                        strips(devices, width: DesignSystem.Metrics.stripMinWidth)
+                    }
+                }
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
+        }
+    }
+
+    /// - Parameter width: fixed strip width when scrolling, or `nil` to share the space evenly.
+    private func strips(_ devices: [AudioDevice], width: CGFloat?) -> some View {
+        HStack(alignment: .top, spacing: DesignSystem.Spacing.md) {
+            ForEach(Array(devices.enumerated()), id: \.element.uid) { index, device in
+                DeviceStrip(device: device, isClock: index == 0)
+                    .frame(width: width)
+                    .frame(maxWidth: width == nil ? .infinity : nil, maxHeight: .infinity)
+            }
+        }
+        .padding(DesignSystem.Spacing.lg)
     }
 
     private var diagnosticsBanner: some View {
