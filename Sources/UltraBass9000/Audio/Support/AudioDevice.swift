@@ -72,8 +72,10 @@ extension AudioDevice {
         do {
             let outputChannels = (try? deviceID.channelCount(scope: kAudioObjectPropertyScopeOutput)) ?? 0
             let inputChannels = (try? deviceID.channelCount(scope: kAudioObjectPropertyScopeInput)) ?? 0
-            let transportRaw: UInt32 = (try? deviceID.read(.global(kAudioDevicePropertyTransportType))) ?? 0
-            let sampleRate: Float64 = (try? deviceID.read(.global(kAudioDevicePropertyNominalSampleRate))) ?? 0
+            let transportRaw = (try? deviceID.read(.global(kAudioDevicePropertyTransportType),
+                                                   as: UInt32.self)) ?? 0
+            let sampleRate = (try? deviceID.read(.global(kAudioDevicePropertyNominalSampleRate),
+                                                 as: Float64.self)) ?? 0
             let outputStreams = (try? deviceID.readArray(.output(kAudioDevicePropertyStreams),
                                                          of: AudioObjectID.self).count) ?? 0
 

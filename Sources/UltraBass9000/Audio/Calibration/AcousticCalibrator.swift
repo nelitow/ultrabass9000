@@ -39,6 +39,7 @@ final class AcousticCalibrator {
         case microphoneAccessDenied
         case noDevicesToMeasure
         case microphoneSilent
+        case playbackDidNotRun
         case cancelled
 
         var errorDescription: String? {
@@ -53,6 +54,8 @@ final class AcousticCalibrator {
                 return "Select at least two output devices to align."
             case .microphoneSilent:
                 return "The microphone recorded nothing but silence. Check that the built-in microphone is not muted or covered."
+            case .playbackDidNotRun:
+                return "The test tones never reached the output devices. Stop and start playback, then try again."
             case .cancelled:
                 return "Auto-sync was cancelled."
             }
@@ -178,10 +181,14 @@ final class AcousticCalibrator {
             """)
 
         var announced = 0
+        var timedOut = false
         let deadline = Date().addingTimeInterval(programSeconds + 5)
         while !control.calibration.isFinished {
             try checkCancelled()
-            if Date() > deadline { break }
+            if Date() > deadline {
+                timedOut = true
+                break
+            }
 
             let position = Int(control.calibration.position.pointee)
             while announced < segments.count, position >= segments[announced].startFrame {
@@ -197,11 +204,22 @@ final class AcousticCalibrator {
         await stopOffMainThread(recorder)
 
         let capture = recorder.recording()
+        let playedFrames = Int(control.calibration.position.pointee)
+        let expectedFrames = Int(control.calibration.programFrames.pointee)
         logger.info("""
             Captured \(capture.count, privacy: .public) frames \
             (\(Double(capture.count) / recorder.sampleRate, privacy: .public) s), \
-            peak=\(recorder.peakLevel, privacy: .public)
+            peak=\(recorder.peakLevel, privacy: .public), \
+            played=\(playedFrames, privacy: .public)/\(expectedFrames, privacy: .public) frames, \
+            timedOut=\(timedOut, privacy: .public)
             """)
+
+        // A program that did not reach its end means the output device's IOProc was not running, so
+        // nothing was ever played. Reporting that as "the room was too quiet" would send the user
+        // hunting for the wrong problem.
+        guard !timedOut, playedFrames >= expectedFrames else {
+            throw CalibrationError.playbackDidNotRun
+        }
         guard recorder.peakLevel > 0.0005 else { throw CalibrationError.microphoneSilent }
 
         return analyse(capture: capture,

@@ -101,7 +101,11 @@ final class AggregateOutput {
             // precisely the limitation this app exists to remove. See `AggregatePlan.isStacked`
             // for the measurements; the header's wording points the other way.
             kAudioAggregateDeviceIsStackedKey: plan.isStacked,
-            kAudioAggregateDeviceTapAutoStartKey: true,
+            // Must be false. The header describes this as making `AudioDeviceStart` "wait for the
+            // first tap that receives audio", and with it on the IOProc does not run freely while
+            // the system is silent. Calibration needs to play its own sweeps into a quiet system,
+            // so the device has to be genuinely running whether or not anything is being tapped.
+            kAudioAggregateDeviceTapAutoStartKey: false,
             kAudioAggregateDeviceSubDeviceListKey: subDeviceEntries,
             kAudioAggregateDeviceTapListKey: [
                 [

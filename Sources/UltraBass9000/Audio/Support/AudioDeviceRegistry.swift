@@ -54,11 +54,12 @@ final class AudioDeviceRegistry {
 
     func refresh() {
         do {
-            let ids: [AudioDeviceID] = try AudioObjectID.system
-                .readArray(.global(kAudioHardwarePropertyDevices))
+            let ids = try AudioObjectID.system
+                .readArray(.global(kAudioHardwarePropertyDevices), of: AudioDeviceID.self)
             devices = ids.compactMap(AudioDevice.init(deviceID:))
             defaultOutputDeviceID = (try? AudioObjectID.system
-                .read(.global(kAudioHardwarePropertyDefaultOutputDevice))) ?? .unknown
+                .read(.global(kAudioHardwarePropertyDefaultOutputDevice),
+                      as: AudioDeviceID.self)) ?? .unknown
         } catch {
             logger.error("Device enumeration failed: \(error.localizedDescription, privacy: .public)")
             devices = []

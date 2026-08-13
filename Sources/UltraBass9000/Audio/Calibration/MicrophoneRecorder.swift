@@ -32,7 +32,8 @@ final class MicrophoneRecorder {
                                  status: kAudioHardwareBadDeviceError)
         }
 
-        let rate: Float64 = (try? deviceID.read(.global(kAudioDevicePropertyNominalSampleRate))) ?? 48_000
+        let rate = (try? deviceID.read(.global(kAudioDevicePropertyNominalSampleRate),
+                                       as: Float64.self)) ?? 48_000
         sampleRate = rate > 0 ? rate : 48_000
         capacityFrames = max(1, Int(capacitySeconds * sampleRate))
 

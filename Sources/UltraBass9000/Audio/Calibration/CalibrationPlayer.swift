@@ -32,7 +32,10 @@ final class CalibrationPlayer {
 
     /// Playback level for the sweep. Loud enough to be heard across a room over normal background
     /// noise, quiet enough not to startle anyone or drive a speaker into distortion.
-    static let amplitude: Float = 0.35
+    ///
+    /// The device's own hardware volume still applies on top of this, so the level reaching the
+    /// microphone can be far lower than it looks here.
+    static let amplitude: Float = 0.6
 
     init() {
         signal = .allocate(capacity: Self.maxSignalFrames)

@@ -51,11 +51,15 @@ extension AudioObjectID {
 
     /// Reads a single fixed-layout value. Allocates with `T`'s alignment so `load(as:)` is legal.
     ///
-    /// The size check is not paranoia. `T` is inferred from the call site, and an expression like
-    /// `let id: AudioDeviceID? = try? object.read(address)` infers `T == AudioDeviceID?` — eight
-    /// bytes — while the HAL writes four. Without this check the upper half is whatever the
-    /// allocator handed back, and the result is a plausible-looking device ID that does not exist.
-    func read<T>(_ address: AudioObjectPropertyAddress, as type: T.Type = T.self) throws -> T {
+    /// `as:` is deliberately **not** defaulted, because inferring `T` from context is a trap.
+    /// `let rate: Float64 = (try? object.read(address)) ?? 0` looks unambiguous but lets Swift
+    /// settle on `T == Float64?` — the optional-coalescing operator is happy to unwrap one level
+    /// too few — so the reader asks the HAL for nine bytes of a property that has eight. Before the
+    /// size check below existed this returned whatever the allocator had left in the padding, which
+    /// on this codebase happened to look correct for months.
+    ///
+    /// Requiring the type at every call site makes that class of mistake impossible to write.
+    func read<T>(_ address: AudioObjectPropertyAddress, as type: T.Type) throws -> T {
         var address = address
         let expected = MemoryLayout<T>.size
         var size = UInt32(expected)
@@ -78,7 +82,9 @@ extension AudioObjectID {
     }
 
     /// Reads a variable-length array property (device lists, stream lists, …).
-    func readArray<T>(_ address: AudioObjectPropertyAddress, of type: T.Type = T.self) throws -> [T] {
+    ///
+    /// `of:` is required for the same reason `read(_:as:)` requires `as:`.
+    func readArray<T>(_ address: AudioObjectPropertyAddress, of type: T.Type) throws -> [T] {
         var address = address
         var size = try dataSize(address)
         guard size > 0 else { return [] }
