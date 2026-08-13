@@ -22,7 +22,7 @@
 	<!-- Required for Core Audio process taps. Without this key the TCC prompt never
 	     appears and every tapped buffer arrives silently filled with zeros. -->
 	<key>NSAudioCaptureUsageDescription</key>
-	<string>UltraBass 9000 needs to capture system audio so it can process and route it to your output devices.</string>
+	<string>ULTRABASS:9000 needs to capture system audio so it can process and route it to your output devices.</string>
 
 	<!-- Acoustic auto-sync listens on the built-in microphone. This is a different TCC service from
 	     audio capture above, with the same failure mode when missing: no prompt, and the recording
@@ -30,7 +30,7 @@
 	     suppresses a microphone prompt for the output aggregate — calibration records through its
 	     own IOProc on the input device, and only while the user asks for it. -->
 	<key>NSMicrophoneUsageDescription</key>
-	<string>UltraBass 9000 uses the microphone only during auto-sync, to hear a short test tone from each output device and measure how far apart they arrive.</string>
+	<string>ULTRABASS:9000 uses the microphone only during auto-sync, to hear a short test tone from each output device and measure how far apart they arrive.</string>
 
 	<!-- Phase 5 flips this to true for a pure menu-bar app. Kept false during
 	     development so the app has a Dock icon and is easy to quit. -->

@@ -52,7 +52,7 @@ final class AcousticCalibrator {
             case .noInputDevice:
                 return "No microphone is available."
             case .microphoneAccessDenied:
-                return "UltraBass 9000 needs microphone access to hear the test tones. Grant it in System Settings › Privacy & Security › Microphone, then try again."
+                return "ULTRABASS:9000 needs microphone access to hear the test tones. Grant it in System Settings › Privacy & Security › Microphone, then try again."
             case .noDevicesToMeasure:
                 return "Select at least two output devices to align."
             case .microphoneSilent:

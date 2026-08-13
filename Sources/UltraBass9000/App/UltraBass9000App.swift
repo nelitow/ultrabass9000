@@ -12,7 +12,7 @@ struct UltraBass9000App: App {
     }
 
     var body: some Scene {
-        Window("UltraBass 9000", id: "main") {
+        Window("ULTRABASS:9000", id: "main") {
             ContentView()
                 .environment(engine)
                 .environment(registry)
@@ -21,7 +21,7 @@ struct UltraBass9000App: App {
         .defaultSize(width: 880, height: 600)
         .windowResizability(.contentMinSize)
 
-        MenuBarExtra("UltraBass 9000", systemImage: "waveform") {
+        MenuBarExtra("ULTRABASS:9000", systemImage: "waveform") {
             MenuBarPopoverView()
                 .environment(engine)
                 .environment(registry)

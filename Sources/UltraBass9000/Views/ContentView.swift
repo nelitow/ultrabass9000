@@ -50,7 +50,7 @@ struct ContentView: View {
                 }
             }
         }
-        .navigationTitle("UltraBass 9000")
+        .navigationTitle("ULTRABASS:9000")
     }
 
     // MARK: - Toolbar
@@ -82,6 +82,7 @@ struct ContentView: View {
                 .frame(width: 8, height: 8)
             Text(engine.status.label)
                 .font(DesignSystem.Typography.stripLabel)
+                .lineLimit(1)
         }
         .padding(.horizontal, DesignSystem.Spacing.sm)
         .padding(.vertical, DesignSystem.Spacing.xs)
@@ -151,10 +152,12 @@ struct ContentView: View {
                 Text("Lowest Latency")
                     .font(DesignSystem.Typography.readout)
                     .foregroundStyle(DesignSystem.Colors.success)
+                    .lineLimit(1)
             } else if engine.syncLatencyMilliseconds > 0 {
                 Text("Sync +\(DesignSystem.Delay.formattedMilliseconds(engine.syncLatencyMilliseconds))")
                     .font(DesignSystem.Typography.readout)
                     .foregroundStyle(DesignSystem.Colors.textSecondary)
+                    .lineLimit(1)
             }
         }
         .padding(.horizontal, DesignSystem.Spacing.sm)

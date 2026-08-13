@@ -1,12 +1,12 @@
-# UltraBass 9000
+# ULTRABASS:9000
 
-UltraBass 9000 is a free, open-source macOS app that sends system audio to multiple output devices at
+ULTRABASS:9000 is a free, open-source macOS app that sends system audio to multiple output devices at
 once, each with its own volume, 5-band EQ, crossover filters (high-pass, low-pass, band-pass with real
 dB/octave slopes), and delay for time alignment.
 
 macOS's built-in Multi-Output Device can do exactly one of those things: play the same signal to more
 than one device. It can't EQ, filter, or delay any of them independently, and once you build one, the
-system volume keys stop working. UltraBass 9000 adds the missing part: real per-device processing, plus
+system volume keys stop working. ULTRABASS:9000 adds the missing part: real per-device processing, plus
 **acoustic auto-sync**, which plays a sweep from each output in turn, listens back on the Mac's built-in
 microphone, and computes the delay needed to line them up at the listening position. Measured
 repeatability on the author's own hardware: about 0.2 ms.
@@ -26,7 +26,7 @@ knowing about even though it doesn't run the same way:
 
 | Tool | Multiple outputs at once | Per-device EQ/filters | Per-device delay | Auto-measures the delay | Price |
 |---|---|---|---|---|---|
-| **UltraBass 9000** | Yes | Yes | Yes | Yes (mic + sweep) | Free |
+| **ULTRABASS:9000** | Yes | Yes | Yes | Yes (mic + sweep) | Free |
 | macOS Multi-Output Device (built in) | Yes | No | No | No | Free |
 | SoundSource 6 | Yes (Output Groups) | Only volume is independent per device in a group | No | No | $49 |
 | Airfoil | Yes, kept in sync | No | Yes, manual sliders | No | $35 |
@@ -44,10 +44,10 @@ Apple's Multi-Output Device has no single volume it can report to the system, si
 independent devices playing the same stream. macOS doesn't know which one you mean when you press F11,
 so it disables the system volume keys rather than guess.
 
-With UltraBass 9000 running, the keys are dead for a different reason. The tap mutes the original
+With ULTRABASS:9000 running, the keys are dead for a different reason. The tap mutes the original
 playback path (`muteBehavior = .mutedWhenTapped`), so there's no default-device volume left for the
 system keys to control in the first place. Per-device gain lives inside the app itself, as a slider per
-output. Capturing the volume keys so they control UltraBass 9000's own gain instead is on the roadmap,
+output. Capturing the volume keys so they control ULTRABASS:9000's own gain instead is on the roadmap,
 not shipped.
 
 ### Does it need a driver or kernel extension?
