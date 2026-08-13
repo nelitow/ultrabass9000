@@ -553,6 +553,59 @@ section {
   color: var(--text-faint);
 }
 
+/* ---------- FAQ ---------- */
+
+.faq-list {
+  border-top: 1px solid var(--edge-1);
+}
+
+.faq-item {
+  border-bottom: 1px solid var(--edge-1);
+}
+
+.faq-item summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  padding: var(--sp-4) 0;
+  font-family: var(--font-ui);
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
+  color: var(--text-body);
+  cursor: pointer;
+  list-style: none;
+}
+
+.faq-item summary::marker,
+.faq-item summary::-webkit-details-marker {
+  display: none;
+  content: "";
+}
+
+.faq-item__mark {
+  flex-shrink: 0;
+  width: 20px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: var(--text-md);
+  color: var(--text-faint);
+  transition: transform var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+
+.faq-item[open] .faq-item__mark {
+  transform: rotate(45deg);
+  color: var(--accent);
+}
+
+.faq-item p {
+  margin: 0 0 var(--sp-4);
+  max-width: 68ch;
+  font-size: var(--text-sm);
+  line-height: var(--leading-body);
+  color: var(--text-dim);
+}
+
 /* ---------- closing CTA band ---------- */
 
 .cta-band {

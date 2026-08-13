@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Centralized visual language for UltraBass 9000: palette, spacing, type,
@@ -144,6 +145,51 @@ enum DesignSystem {
         /// Gridline marks, in dBFS, drawn faintly behind the fill.
         static let tickMarksDB: [Float] = [-6, -12, -24, -48]
     }
+}
+
+// MARK: - Categorical series palette (multi-device charts)
+
+private extension NSColor {
+    /// Opaque color from a 6-digit hex string with no leading `#`. Only used to build the dynamic
+    /// light/dark colors below from a fixed hex palette; not a general-purpose parser.
+    convenience init(hex: String) {
+        let value = UInt64(hex, radix: 16) ?? 0
+        self.init(
+            srgbRed: CGFloat((value & 0xFF0000) >> 16) / 255,
+            green: CGFloat((value & 0x00FF00) >> 8) / 255,
+            blue: CGFloat(value & 0x0000FF) / 255,
+            alpha: 1
+        )
+    }
+}
+
+extension DesignSystem.Colors {
+    /// A color that switches between two fixed hex values with the current appearance, the same
+    /// way the `Color(nsColor: .xxx)` system colors above track appearance automatically. Used to
+    /// give each series in `responseSeries` real contrast in both light and dark rather than one
+    /// compromise hue that is faint in one of them.
+    private static func dynamic(light: String, dark: String) -> Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            return NSColor(hex: isDark ? dark : light)
+        })
+    }
+
+    /// Fixed-order categorical palette for overlaying several devices' curves on one plot (see
+    /// `ResponseChart`). A device's color is its slot index, assigned once and never re-sorted, so
+    /// it stays the same device's color as others are added to or removed from the plot. The order
+    /// and hues are chosen so adjacent series stay distinguishable under common color-vision
+    /// deficiencies, not just for typical vision.
+    static let responseSeries: [Color] = [
+        dynamic(light: "2a78d6", dark: "3987e5"), // blue
+        dynamic(light: "eb6834", dark: "d95926"), // orange
+        dynamic(light: "1baf7a", dark: "199e70"), // aqua
+        dynamic(light: "eda100", dark: "c98500"), // yellow
+        dynamic(light: "e87ba4", dark: "d55181"), // magenta
+        dynamic(light: "008300", dark: "008300"), // green
+        dynamic(light: "4a3aa7", dark: "9085e9"), // violet
+        dynamic(light: "e34948", dark: "e66767"), // red
+    ]
 }
 
 // MARK: - Comparable clamp

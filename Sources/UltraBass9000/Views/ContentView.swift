@@ -11,6 +11,7 @@ struct ContentView: View {
     /// are just filtered locally by id.
     @State private var dismissedDiagnosticIDs: Set<String> = []
     @State private var isCalibrationSheetPresented = false
+    @State private var isResponseSheetPresented = false
 
     private var visibleDiagnostics: [EngineDiagnostic] {
         engine.diagnostics.filter { !dismissedDiagnosticIDs.contains($0.id) }
@@ -29,6 +30,25 @@ struct ContentView: View {
                 mixerArea
             }
             .background(DesignSystem.Colors.canvas)
+            // Deliberately not chained onto `toolbar`'s own `.sheet(isPresented:)` below: two
+            // `.sheet` modifiers on the same view is a known SwiftUI footgun, so this one gets its
+            // own view in the hierarchy instead of trusting that they'd coexist.
+            .sheet(isPresented: $isResponseSheetPresented) {
+                ResponseSheet()
+            }
+            // Development affordance, alongside -UB9KAutoStart and -UB9KCalibrate: opens the
+            // response chart as soon as there is something to plot, so the whole measure-and-draw
+            // path can be exercised from a script. Does nothing without the flag.
+            .task {
+                guard UserDefaults.standard.bool(forKey: "UB9KShowResponse") else { return }
+                for _ in 0..<90 {
+                    if engine.hasMeasuredResponses {
+                        isResponseSheetPresented = true
+                        return
+                    }
+                    try? await Task.sleep(for: .seconds(1))
+                }
+            }
         }
         .navigationTitle("UltraBass 9000")
     }
@@ -43,6 +63,7 @@ struct ContentView: View {
                 Spacer(minLength: DesignSystem.Spacing.lg)
                 syncControl
                 autoSyncButton
+                responseButton
                 masterGainControl
             }
         }
@@ -154,6 +175,22 @@ struct ContentView: View {
             Label("Auto-Sync", systemImage: "waveform.and.mic")
         }
         .buttonStyle(.bordered)
+    }
+
+    /// Opens the measured-response chart. Disabled rather than hidden when there's nothing to
+    /// show yet, so the button stays discoverable and its tooltip can say why it's greyed out
+    /// instead of the control just disappearing.
+    private var responseButton: some View {
+        Button {
+            isResponseSheetPresented = true
+        } label: {
+            Label("Response", systemImage: "chart.xyaxis.line")
+        }
+        .buttonStyle(.bordered)
+        .disabled(!engine.hasMeasuredResponses)
+        .help(engine.hasMeasuredResponses
+              ? "See each device's measured frequency response."
+              : "Run Auto-Sync first to measure a response.")
     }
 
     // MARK: - Mixer

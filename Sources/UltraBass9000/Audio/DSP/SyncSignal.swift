@@ -10,11 +10,17 @@ enum SyncSignal {
 
     /// Band limits for the sweep.
     ///
-    /// Below 200 Hz laptop speakers produce almost nothing, and above 8 kHz the microphone's own
-    /// response and room reflections dominate. Sweeping outside that range adds no information and
-    /// costs signal-to-noise.
-    static let lowFrequency: Double = 200
-    static let highFrequency: Double = 8_000
+    /// Wide enough to answer the question the measurement is usually being taken to answer: which
+    /// device actually produces bass. An earlier, narrower 200 Hz to 8 kHz sweep was chosen purely
+    /// for timing robustness, and it worked, but it meant the response curves simply stopped before
+    /// the region where a laptop speaker and a subwoofer differ most. A device producing nothing at
+    /// 50 Hz is a measurement; no data at 50 Hz is not.
+    ///
+    /// The bottom stops short of 30 Hz and the top short of Nyquist because neither end carries
+    /// useful information: below that most speakers are inaudible and above it the microphone's own
+    /// response dominates.
+    static let lowFrequency: Double = 30
+    static let highFrequency: Double = 16_000
     static let defaultDuration: Double = 0.4
 
     /// A logarithmic sine sweep, windowed so it starts and ends at silence.
