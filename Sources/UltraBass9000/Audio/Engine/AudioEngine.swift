@@ -394,7 +394,9 @@ final class AudioEngine {
         let devices = plan.subDevices.map { subDevice -> (uid: String, name: String) in
             (subDevice.uid, registry.device(uid: subDevice.uid)?.name ?? subDevice.uid)
         }
-        let total = devices.count
+        // Sweeps, not devices. Each device is swept once per pass, and the progress index counts
+        // sweeps, so counting the total in devices produced "Sweep 9 of 3".
+        let total = devices.count * AcousticCalibrator.passes
         let calibrator = AcousticCalibrator(control: control)
         activeCalibrator = calibrator
         calibration = .preparing
