@@ -1,0 +1,72 @@
+name: CI
+
+# Build and test on every push and pull request.
+#
+# Deliberately does not publish a release. CI has no signing identity, and macOS grants
+# audio-capture permission only to properly signed builds, so a CI-built .app would launch, look
+# entirely normal, and capture nothing. Shipping that would be worse than shipping nothing, so
+# UltraBass 9000 is distributed as source. See README.md for the build instructions users follow.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  HOMEBREW_NO_AUTO_UPDATE: "1"
+
+jobs:
+  build-and-test:
+    name: Build and test
+    # macos-26 provides Xcode 26.x with macOS SDKs 26.0-26.5, which is what this project's
+    # MACOSX_DEPLOYMENT_TARGET=26.0 needs. Pinned explicitly rather than macos-latest, so a future
+    # label rollover cannot silently drop the SDK this project requires.
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify a macOS 26 SDK is available
+        run: |
+          xcodebuild -version
+          echo "--- installed macOS SDKs ---"
+          xcodebuild -showsdks | grep -i macos || true
+          if ! xcodebuild -showsdks | grep -qi 'macosx26'; then
+            echo "::error::No macOS 26.x SDK on this runner. UltraBass 9000 needs one (MACOSX_DEPLOYMENT_TARGET=26.0 in project.yml). The runner image has changed; update the runs-on label to an image that has it."
+            exit 1
+          fi
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      # The Xcode project is generated, not committed. Editing project.yml is the only supported
+      # way to change build settings.
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      # Signing is overridden here rather than in project.yml: a developer building locally needs
+      # their own identity so macOS will grant the app audio-capture permission, and CI has no
+      # identity at all. The test target depends on the app target, so this builds both.
+      - name: Build and test
+        run: |
+          xcodebuild \
+            -project UltraBass9000.xcodeproj \
+            -scheme UltraBass9000 \
+            -configuration Debug \
+            -destination 'platform=macOS' \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            DEVELOPMENT_TEAM="" \
+            test

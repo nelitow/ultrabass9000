@@ -53,7 +53,7 @@ Grouped by what kind of thing each one is, since that's the axis that actually e
 | Roon | Music player with a DSP engine | Per-zone parametric EQ, yes. Per-zone delay for keeping zones in sync is a standing feature request on Roon's own community forum ("DSP function to add delay for better zone sync"), not a shipped feature. |
 | Dirac Live | Room correction, paired with an AVR/streamer or run as a computer processor/plugin | Built for correcting one output path (a receiver's speaker set, or a DAW's monitor bus), not for fanning independently-processed audio out to several unrelated consumer devices attached to the same Mac at once. |
 | HouseCurve | Room correction and time-alignment app | iOS and car-audio focused; its own site does not list macOS as supported. |
-| JustRoom | — | No macOS app, plugin, or project by this name turned up in any search. If it refers to something else, this research didn't find it. |
+| JustRoom | n/a | No macOS app, plugin, or project by this name turned up in any search. If it refers to something else, this research didn't find it. |
 | BlackHole | Free virtual audio driver | A null sink, nothing more. It's the plumbing other tools (including CamillaDSP setups) route through, not a competitor in its own right. GPL-3, and Existential Audio requires a separate commercial license for closed-source reuse. |
 
 ### Hardware
@@ -106,17 +106,15 @@ describing the two symptoms (can't control volume once devices are combined, can
 like one system) separately, because nothing ties the two problems together into one feature. That's
 the actual gap, and it's a real one, not a marketing frame stretched to fit.
 
-Realistically, three groups would use this:
-
-1. **Desk setups missing bass**, the author's own case: a laptop or a small monitor pair plus a
-   Bluetooth speaker or a cheap subwoofer, wanting the low end crossed over correctly and time-aligned
-   instead of just loud and smeared.
-2. **People who already built a Multi-Output Device** and hit the volume-key and per-device tuning
-   wall that Apple's own community forum is full of complaints about, without wanting to pay $49 for
-   SoundSource and still not getting delay sync out of it.
-3. **Hobbyists doing on a budget what a miniDSP + REW session does**, minus the standalone mic and the
-   manual correlation work, at the cost of it only working for a Mac's own attached outputs and only
-   at one listening position.
+Realistically, two groups would use this. The first is desk and near-field setups combining
+mismatched drivers on purpose: a laptop or a small monitor pair plus a Bluetooth speaker or a cheap
+subwoofer, wanting the low end crossed over correctly and time-aligned instead of just loud and
+smeared. That's the author's own case, and it's also the cheapest possible version of what a miniDSP
+plus an REW session does, minus the standalone mic and the manual correlation work, at the cost of it
+only working for a Mac's own attached outputs and only at one listening position. The second is people
+who already built a Multi-Output Device and hit the volume-key and per-device tuning wall that Apple's
+own community forum is full of complaints about, without wanting to pay $49 for SoundSource and still
+not getting delay sync out of it.
 
 ## Where it's weaker than the alternatives
 
@@ -153,23 +151,23 @@ Said plainly, in the same terms as the feature list, not hedged:
 
 ## Sources
 
-- [SoundSource Output Groups manual](https://www.rogueamoeba.com/support/manuals/soundsource/?page=output-groups) and [SoundSource 6 announcement](https://weblog.rogueamoeba.com/2025/12/04/soundsource-6-is-here/) and [AlternativeTo coverage](https://alternativeto.net/news/2025/12/soundsource-6-brings-grouped-outputs-airplay-support-quick-configs-and-refreshed-ui) — confirms Output Groups is new (Dec 2025) and that only the volume slider is independently adjustable per device within a group.
-- [Rogue Amoeba SoundSource purchase page](https://rogueamoeba.com/soundsource/buy.php) — $49 list price, confirmed August 2026.
-- [Ginger Audio GroundControl SPHERE manual](https://www.gingeraudio.com/manuals/sphere) — per-channel AU plugin slots, per-channel delay to 0.01 ms, "Multi-output device" for combining interfaces, requires explicit routing rather than automatic system capture.
-- [GroundControl Sphere Studio, Sweetwater](https://www.sweetwater.com/store/detail/GCSphereStu--ginger-audio-groundcontrol-sphere-studio) and [Sphere Atmos, Sweetwater](https://www.sweetwater.com/store/detail/GCSphereAtmos--ginger-audio-groundcontrol-sphere-atmos) — $199 (Studio, 2.1) and $499 (Atmos, 9.1.6) list pricing.
-- [CamillaDSP](https://www.camilladsp.com/) and [CamillaDSP CoreAudio backend docs](https://github.com/HEnquist/camilladsp/blob/master/backend_coreaudio.md) — macOS support via CoreAudio, BlackHole as the typical capture source.
-- [How to run CamillaDSP with Multiple DACs, Mark Zachmann](https://medium.com/home-wireless/how-to-run-camilladsp-with-multiple-dacs-9672a4639cf3) — confirms multiple independent output devices require manually building a merged/aggregate device; not native to CamillaDSP.
-- [eqMac](https://eqmac.app/) and [eqMac GitHub](https://github.com/bitgapp/eqMac) — multi-output/aggregate device support as an output choice, one system-wide EQ chain.
-- [FineTune](https://github.com/ronitsingh10/FineTune) — per-app volume/EQ, multi-device output, media keys; GPL-3.
-- [AudioRouterNow](https://github.com/mauriciomorkun/AudioRouterNow) and [MacRumors thread](https://forums.macrumors.com/threads/audiorouternow-free-open-source-audio-router-for-macos-no-kext-menu-bar.2484444/) — routing only, no EQ, confirmed by the maintainer's own description; thread shows no requests for EQ/delay, only routing stability.
-- [AudioRouter, jkjoplin](https://github.com/jkjoplin/AudioRouter) — a separate, smaller open-source project doing per-app (not per-device) EQ and routing; not in the original roadmap research.
-- [Sonarworks Support: "Multiple Stereo Outputs Simultaneously and Independently?"](https://support.sonarworks.com/hc/en-us/community/posts/20237494424850-Multiple-Stereo-Outputs-Simultaneously-and-Independently) and ["Should SoundID Reference work with multiple outs?"](https://support.sonarworks.com/hc/en-us/community/posts/4410308085778-Should-SoundID-Reference-work-with-multiple-outs) — confirms no multi-output support.
-- [Roon: "DSP function to add delay for better zone sync"](https://community.roonlabs.com/t/dsp-function-to-add-delay-for-better-zone-sync/158356) and [Roon DSP Engine docs](https://help.roonlabs.com/portal/en/kb/roon-labs-llc/audio/dsp-engine) — per-zone EQ shipped, per-zone delay a standing feature request.
-- [Dirac Live](https://www.dirac.com/products/room-correction) and [Dirac Live 3.11 changelog](https://helpdesk.dirac.com/en/dirac-live/Dirac-Live-311-LATEST-Software-Changelog-bfed) — time alignment and room correction for a single processed output path.
-- [HouseCurve](https://housecurve.com/) and [HouseCurve Time Alignment docs](https://housecurve.com/docs/tuning/time_align.html) — iOS/car-audio tool; macOS not listed as supported.
-- [miniDSP digital crossover basics](https://www.minidsp.com/applications/digital-crossovers/digital-crossover-basics) — gain/delay block for time alignment across a box's own channels, measured externally with REW.
-- [Apple Community: "How to adjust volume on a Multi-Output Device?"](https://discussions.apple.com/thread/256169243), ["Multi-Output Device sync issue"](https://discussions.apple.com/thread/7925534) — real users hitting the volume and sync problems this app addresses.
+- [SoundSource Output Groups manual](https://www.rogueamoeba.com/support/manuals/soundsource/?page=output-groups), [SoundSource 6 announcement](https://weblog.rogueamoeba.com/2025/12/04/soundsource-6-is-here/), and [AlternativeTo coverage](https://alternativeto.net/news/2025/12/soundsource-6-brings-grouped-outputs-airplay-support-quick-configs-and-refreshed-ui): confirms Output Groups is new (Dec 2025) and that only the volume slider is independently adjustable per device within a group.
+- [Rogue Amoeba SoundSource purchase page](https://rogueamoeba.com/soundsource/buy.php): $49 list price, confirmed August 2026.
+- [Ginger Audio GroundControl SPHERE manual](https://www.gingeraudio.com/manuals/sphere): per-channel AU plugin slots, per-channel delay to 0.01 ms, "Multi-output device" for combining interfaces, requires explicit routing rather than automatic system capture.
+- [GroundControl Sphere Studio, Sweetwater](https://www.sweetwater.com/store/detail/GCSphereStu--ginger-audio-groundcontrol-sphere-studio) and [Sphere Atmos, Sweetwater](https://www.sweetwater.com/store/detail/GCSphereAtmos--ginger-audio-groundcontrol-sphere-atmos): $199 (Studio, 2.1) and $499 (Atmos, 9.1.6) list pricing.
+- [CamillaDSP](https://www.camilladsp.com/) and [CamillaDSP CoreAudio backend docs](https://github.com/HEnquist/camilladsp/blob/master/backend_coreaudio.md): macOS support via CoreAudio, BlackHole as the typical capture source.
+- [How to run CamillaDSP with Multiple DACs, Mark Zachmann](https://medium.com/home-wireless/how-to-run-camilladsp-with-multiple-dacs-9672a4639cf3): confirms multiple independent output devices require manually building a merged/aggregate device. Not native to CamillaDSP.
+- [eqMac](https://eqmac.app/) and [eqMac GitHub](https://github.com/bitgapp/eqMac): multi-output/aggregate device support as an output choice, one system-wide EQ chain.
+- [FineTune](https://github.com/ronitsingh10/FineTune): per-app volume/EQ, multi-device output, media keys. GPL-3.
+- [AudioRouterNow](https://github.com/mauriciomorkun/AudioRouterNow) and [MacRumors thread](https://forums.macrumors.com/threads/audiorouternow-free-open-source-audio-router-for-macos-no-kext-menu-bar.2484444/): routing only, no EQ, confirmed by the maintainer's own description. The thread shows no requests for EQ/delay, only routing stability.
+- [AudioRouter, jkjoplin](https://github.com/jkjoplin/AudioRouter): a separate, smaller open-source project doing per-app (not per-device) EQ and routing. Not in the original roadmap research.
+- [Sonarworks Support: "Multiple Stereo Outputs Simultaneously and Independently?"](https://support.sonarworks.com/hc/en-us/community/posts/20237494424850-Multiple-Stereo-Outputs-Simultaneously-and-Independently) and ["Should SoundID Reference work with multiple outs?"](https://support.sonarworks.com/hc/en-us/community/posts/4410308085778-Should-SoundID-Reference-work-with-multiple-outs): confirms no multi-output support.
+- [Roon: "DSP function to add delay for better zone sync"](https://community.roonlabs.com/t/dsp-function-to-add-delay-for-better-zone-sync/158356) and [Roon DSP Engine docs](https://help.roonlabs.com/portal/en/kb/roon-labs-llc/audio/dsp-engine): per-zone EQ shipped, per-zone delay a standing feature request.
+- [Dirac Live](https://www.dirac.com/products/room-correction) and [Dirac Live 3.11 changelog](https://helpdesk.dirac.com/en/dirac-live/Dirac-Live-311-LATEST-Software-Changelog-bfed): time alignment and room correction for a single processed output path.
+- [HouseCurve](https://housecurve.com/) and [HouseCurve Time Alignment docs](https://housecurve.com/docs/tuning/time_align.html): iOS/car-audio tool. macOS not listed as supported.
+- [miniDSP digital crossover basics](https://www.minidsp.com/applications/digital-crossovers/digital-crossover-basics): gain/delay block for time alignment across a box's own channels, measured externally with REW.
+- [Apple Community: "How to adjust volume on a Multi-Output Device?"](https://discussions.apple.com/thread/256169243) and ["Multi-Output Device sync issue"](https://discussions.apple.com/thread/7925534): real users hitting the volume and sync problems this app addresses.
 - [MacRumors: "Anyway to control volume for mult-outpit device, even if third party or cludgy?"](https://forums.macrumors.com/threads/anyway-to-control-volume-for-mult-outpit-device-even-if-third-party-or-cludgy.2367662/)
-- [Tom's Guide Forum: "can I create a bluetooth delay?"](https://forums.tomsguide.com/threads/can-i-create-a-bluetooth-delay.461396/) — real user asking for manual delay to fix a Bluetooth speaker mismatch; page could not be fully loaded, description reflects search-result summary only.
-- [Gearspace: "Speakers time align"](https://gearspace.com/board/post-production-forum/1052364-speakers-time-align.html) — real engineer measuring and correcting up to 1.9 ms of arrival-time mismatch between monitors; page returned a 403 on direct fetch, description reflects search-result summary only.
+- [Tom's Guide Forum: "can I create a bluetooth delay?"](https://forums.tomsguide.com/threads/can-i-create-a-bluetooth-delay.461396/): real user asking for manual delay to fix a Bluetooth speaker mismatch. Page could not be fully loaded; description reflects search-result summary only.
+- [Gearspace: "Speakers time align"](https://gearspace.com/board/post-production-forum/1052364-speakers-time-align.html): real engineer measuring and correcting up to 1.9 ms of arrival-time mismatch between monitors. Page returned a 403 on direct fetch; description reflects search-result summary only.
 - Local verification against this repository: `git log` (`f83b691` "Phase 4: per-device delay lines and acoustic auto-sync", `ddb7d46`, `8d1de38` "Band-pass with real edges and slopes"), and `Sources/UltraBass9000/Audio/Calibration/AcousticCalibrator.swift`, read directly for what acoustic auto-sync actually measures and what it skips.
