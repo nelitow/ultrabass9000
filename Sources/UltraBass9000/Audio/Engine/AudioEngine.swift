@@ -1,3 +1,4 @@
+import AppKit
 import CoreAudio
 import Foundation
 import Observation
@@ -163,6 +164,7 @@ final class AudioEngine {
     // MARK: - Private state
 
     private let control = RenderControlBlock()
+    private let mediaKeys = MediaKeyMonitor()
     private var tap: ProcessTap?
     private var output: AggregateOutput?
     private var plan: AggregatePlan?
@@ -171,6 +173,8 @@ final class AudioEngine {
     private var deviceGains: [String: Float] = [:]
     private var deviceMutes: [String: Bool] = [:]
     private var deviceProcessing: [String: DeviceProcessing] = [:]
+    /// Display names of every device seen this session, so one that unplugs can still be named.
+    private var rememberedNames: [String: String] = [:]
     private var deviceDelays: [String: DeviceDelay] = [:]
     private var activeCalibrator: AcousticCalibrator?
     private var calibrationTask: Task<Void, Never>?
@@ -189,6 +193,14 @@ final class AudioEngine {
         control.masterGain.pointee = masterGain
         control.masterMuted.pointee = isMasterMuted ? 1 : 0
         startMeterTimer()
+
+        mediaKeys.onKey = { [weak self] event, modifiers in
+            self?.handleMediaKey(event, modifiers: modifiers)
+        }
+        mediaKeys.onStatusChange = { [weak self] status in
+            self?.mediaKeyStatus = status
+        }
+        if capturesVolumeKeys { mediaKeys.start() }
 
         // Development affordance: `open UltraBass9000.app --args -UB9KAutoStart YES` brings the
         // engine up against the persisted selection without a click, so the Core Audio path can be
@@ -351,6 +363,60 @@ final class AudioEngine {
                 control.delays.setDelay(frames: frames, deviceIndex: index)
             }
         }
+    }
+
+    // MARK: - Volume keys
+
+    /// Whether F10, F11 and F12 drive this app.
+    ///
+    /// Off by default: taking the volume keys is a system-wide change and needs Accessibility
+    /// permission, neither of which should happen because someone opened an audio app once.
+    var capturesVolumeKeys: Bool = false {
+        didSet {
+            guard capturesVolumeKeys != oldValue else { return }
+            capturesVolumeKeys ? mediaKeys.start() : mediaKeys.stop()
+            persist()
+        }
+    }
+
+    private(set) var mediaKeyStatus: MediaKeyStatus = .off
+
+    /// Set by the app at launch so the engine can raise a HUD without importing any UI.
+    var volumeHUDPresenter: ((_ fraction: Double, _ isMuted: Bool) -> Void)?
+
+    /// Prompts for Accessibility. macOS grants it asynchronously and only after the user acts in
+    /// System Settings, so this arms a poll rather than expecting an answer.
+    func requestVolumeKeyAccess() {
+        MediaKeyMonitor.requestTrust()
+        Task { @MainActor [weak self] in
+            for _ in 0..<60 {
+                try? await Task.sleep(for: .seconds(1))
+                guard let self, self.capturesVolumeKeys else { return }
+                self.mediaKeys.retryIfTrusted()
+                if self.mediaKeyStatus == .active { return }
+            }
+        }
+    }
+
+    private func handleMediaKey(_ event: MediaKeyEvent, modifiers: NSEvent.ModifierFlags) {
+        // Shift+Option is the system's own gesture for quarter steps.
+        let isFine = modifiers.contains(.shift) && modifiers.contains(.option)
+
+        switch event.key {
+        case .mute:
+            // Repeats on the mute key would flap it on and off while held.
+            guard !event.isRepeat else { return }
+            isMasterMuted.toggle()
+        case .volumeUp, .volumeDown:
+            // A key press on a muted system unmutes, as it does everywhere else.
+            if isMasterMuted { isMasterMuted = false }
+            let nudged = VolumeStep.nudged(gain: Double(masterGain),
+                                           up: event.key == .volumeUp,
+                                           fine: isFine)
+            masterGain = Float(nudged)
+        }
+
+        volumeHUDPresenter?(VolumeStep.fraction(fromLinear: Double(masterGain)), isMasterMuted)
     }
 
     // MARK: - Test beat
@@ -528,12 +594,16 @@ final class AudioEngine {
         var facts: [String: PlannerDevice] = [:]
         for device in registry.devices where device.canOutput {
             facts[device.uid] = PlannerDevice(device)
+            rememberedNames[device.uid] = device.name
         }
         // A device the user picked earlier may be gone by now. Report it rather than silently
         // producing a different setup than the one on screen.
         let missing = selectedOutputUIDs.filter { facts[$0] == nil }
         for uid in missing {
-            diagnostics.append(.deviceDisappeared(uid))
+            // By definition the device is no longer in the registry, so its name has to come from
+            // the last time it was seen. A warning that prints a raw UID names nothing the user
+            // recognises.
+            diagnostics.append(.deviceDisappeared(rememberedNames[uid] ?? uid))
         }
 
         let tapSourceIsVirtual = registry.defaultOutputDevice?.isVirtual ?? false
@@ -702,6 +772,7 @@ final class AudioEngine {
         static let delays = "deviceDelays"
         static let syncEnabled = "syncEnabled"
         static let responses = "measuredResponses"
+        static let volumeKeys = "capturesVolumeKeys"
     }
 
     /// Suppresses writes while `restore()` is assigning to observed properties.
@@ -739,6 +810,7 @@ final class AudioEngine {
             defaults.set(encoded, forKey: Key.delays)
         }
         defaults.set(syncEnabled, forKey: Key.syncEnabled)
+        defaults.set(capturesVolumeKeys, forKey: Key.volumeKeys)
         // Measured curves outlive the session that produced them. Re-running auto-sync costs
         // sixteen seconds of sitting still, which is not a reasonable price for quitting the app.
         if let encoded = try? JSONEncoder().encode(measuredResponses) {
@@ -772,6 +844,7 @@ final class AudioEngine {
            let decoded = try? JSONDecoder().decode([String: [ResponsePoint]].self, from: data) {
             measuredResponses = decoded
         }
+        capturesVolumeKeys = defaults.bool(forKey: Key.volumeKeys)
         syncEnabled = defaults.object(forKey: Key.syncEnabled) == nil
             ? true
             : defaults.bool(forKey: Key.syncEnabled)

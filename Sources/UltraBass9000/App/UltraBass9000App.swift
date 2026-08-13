@@ -5,10 +5,20 @@ struct UltraBass9000App: App {
     @State private var registry: AudioDeviceRegistry
     @State private var engine: AudioEngine
 
+    /// Owned here rather than by the engine: it is an `NSPanel`, and the audio layer has no
+    /// business importing AppKit windows.
+    private let volumeHUD: VolumeHUDController
+
     init() {
         let registry = AudioDeviceRegistry()
+        let engine = AudioEngine(registry: registry)
+        let hud = VolumeHUDController()
+        engine.volumeHUDPresenter = { [hud] fraction, isMuted in
+            hud.show(fraction: fraction, isMuted: isMuted)
+        }
+        volumeHUD = hud
         _registry = State(initialValue: registry)
-        _engine = State(initialValue: AudioEngine(registry: registry))
+        _engine = State(initialValue: engine)
     }
 
     var body: some Scene {

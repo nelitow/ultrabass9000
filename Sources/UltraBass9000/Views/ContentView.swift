@@ -62,9 +62,14 @@ struct ContentView: View {
                 startStopButton
                 Spacer(minLength: DesignSystem.Spacing.lg)
                 syncControl
-                beatButton
-                autoSyncButton
-                responseButton
+                // Five actions plus a status pill and a gain slider do not fit at every window
+                // width. Rather than letting every label truncate to "Au..." and "Resp...", drop
+                // the labels together and keep the icons, which stay legible and keep their
+                // tooltips.
+                ViewThatFits(in: .horizontal) {
+                    actionButtons
+                    actionButtons.labelStyle(.iconOnly)
+                }
                 masterGainControl
             }
         }
@@ -72,6 +77,15 @@ struct ContentView: View {
         .padding(.vertical, DesignSystem.Spacing.sm)
         .sheet(isPresented: $isCalibrationSheetPresented) {
             CalibrationSheet()
+        }
+    }
+
+    private var actionButtons: some View {
+        HStack(spacing: DesignSystem.Spacing.md) {
+            volumeKeysButton
+            beatButton
+            autoSyncButton
+            responseButton
         }
     }
 
@@ -179,6 +193,56 @@ struct ContentView: View {
             Label("Auto-Sync", systemImage: "waveform.and.mic")
         }
         .buttonStyle(.bordered)
+    }
+
+    /// Takes F10 to F12 so they drive this app's master gain.
+    ///
+    /// With the tap running, the device the system keys would adjust has been muted out of the
+    /// signal path, so without this the keys appear to do nothing.
+    private var volumeKeysButton: some View {
+        Button {
+            if engine.mediaKeyStatus == .needsAccessibility {
+                engine.requestVolumeKeyAccess()
+            } else {
+                engine.capturesVolumeKeys.toggle()
+            }
+        } label: {
+            Label(volumeKeysLabel, systemImage: volumeKeysSymbol)
+        }
+        .buttonStyle(.bordered)
+        .tint(engine.mediaKeyStatus == .active ? DesignSystem.Colors.accent : nil)
+        .help(volumeKeysHelp)
+    }
+
+    private var volumeKeysLabel: String {
+        switch engine.mediaKeyStatus {
+        case .active: return "Keys On"
+        case .needsAccessibility: return "Allow Keys"
+        case .failed: return "Keys Failed"
+        case .off: return "Keys Off"
+        }
+    }
+
+    private var volumeKeysSymbol: String {
+        switch engine.mediaKeyStatus {
+        case .active: return "keyboard.fill"
+        case .needsAccessibility: return "lock"
+        case .failed: return "exclamationmark.triangle"
+        case .off: return "keyboard"
+        }
+    }
+
+    private var volumeKeysHelp: String {
+        switch engine.mediaKeyStatus {
+        case .active:
+            return "F10 to F12 control this app. Shift and Option together give quarter steps."
+        case .needsAccessibility:
+            return "Taking the volume keys needs Accessibility permission. Click to ask for it, then allow UltraBass 9000 in System Settings."
+        case .failed(let message):
+            return message
+        case .off:
+            return "Let F10 to F12 control this app's master volume instead of a device that has been muted out of the signal path."
+        }
     }
 
     /// Plays a repeating transient on every output at once, so alignment can be checked by ear.
