@@ -1,16 +1,5 @@
 import SwiftUI
 
-/// One measured device's outcome for the result summary.
-///
-/// `CalibrationState.succeeded` carries only a count, a spread and the *skipped* names — no
-/// per-device breakdown. This is reconstructed by `CalibrationSheet` matching those skipped names
-/// against `AudioEngine.activeDevices`/`delay(for:)`, which is the only join the contract exposes.
-struct DeviceCorrection: Identifiable, Equatable {
-    let id: String
-    let name: String
-    let delay: DeviceDelay
-}
-
 /// Engine-aware wrapper for the acoustic auto-sync flow: reads `AudioEngine.calibration`, derives
 /// the per-device summary, and forwards everything to the stateless `CalibrationFlowView`.
 struct CalibrationSheet: View {
@@ -21,7 +10,6 @@ struct CalibrationSheet: View {
         CalibrationFlowView(
             state: engine.calibration,
             deviceCount: engine.activeDevices.count,
-            corrections: corrections,
             onStart: { engine.startCalibration() },
             onRetry: { engine.startCalibration() },
             onCancel: {
@@ -32,12 +20,6 @@ struct CalibrationSheet: View {
         )
     }
 
-    private var corrections: [DeviceCorrection] {
-        guard case .succeeded(_, _, let skipped) = engine.calibration else { return [] }
-        return engine.activeDevices
-            .filter { !skipped.contains($0.name) }
-            .map { DeviceCorrection(id: $0.uid, name: $0.name, delay: engine.delay(for: $0.uid)) }
-    }
 }
 
 /// Pure presentation for every stage of `CalibrationState`. Holds no reference to `AudioEngine` so
@@ -45,7 +27,6 @@ struct CalibrationSheet: View {
 struct CalibrationFlowView: View {
     let state: CalibrationState
     let deviceCount: Int
-    let corrections: [DeviceCorrection]
     let onStart: () -> Void
     let onRetry: () -> Void
     let onCancel: () -> Void
@@ -82,8 +63,8 @@ struct CalibrationFlowView: View {
             stageStatus(title: "Analysing\u{2026}", detail: "Comparing arrival times and computing delays.")
         case .failed(let message):
             failedContent(message: message)
-        case .succeeded(let alignedDeviceCount, let spreadMilliseconds, let skipped):
-            succeededContent(alignedDeviceCount: alignedDeviceCount, spreadMilliseconds: spreadMilliseconds, skipped: skipped)
+        case .succeeded(let results, let spreadMilliseconds):
+            succeededContent(results: results, spreadMilliseconds: spreadMilliseconds)
         }
     }
 
@@ -159,28 +140,51 @@ struct CalibrationFlowView: View {
         }
     }
 
-    private func succeededContent(alignedDeviceCount: Int, spreadMilliseconds: Double, skipped: [String]) -> some View {
-        VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+    private func succeededContent(results: [CalibrationResult], spreadMilliseconds: Double) -> some View {
+        let measured = results.filter(\.wasMeasured)
+        let skipped = results.filter { !$0.wasMeasured }
+
+        return VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
             HStack(spacing: DesignSystem.Spacing.sm) {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(DesignSystem.Colors.success)
-                Text("Aligned \(alignedDeviceCount) \(alignedDeviceCount == 1 ? "Output" : "Outputs")")
+                Image(systemName: skipped.isEmpty ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                    .foregroundStyle(skipped.isEmpty ? DesignSystem.Colors.success : DesignSystem.Colors.warning)
+                // Always states the denominator. "Aligned 2 Outputs" next to a list of three reads
+                // as a miscount rather than as one device having been skipped.
+                Text(skipped.isEmpty
+                     ? "Aligned \(measured.count) \(measured.count == 1 ? "output" : "outputs")"
+                     : "Aligned \(measured.count) of \(results.count) outputs")
                     .font(DesignSystem.Typography.title)
             }
-            Text("Corrected a \(DesignSystem.Delay.formattedMilliseconds(spreadMilliseconds)) spread between the earliest and latest arrival.")
+
+            Text(measured.count > 1
+                 ? "Corrected a \(DesignSystem.Delay.formattedMilliseconds(spreadMilliseconds)) spread between the earliest and latest arrival."
+                 : "Nothing to correct — only one output could be measured.")
                 .font(.callout)
                 .foregroundStyle(DesignSystem.Colors.textSecondary)
 
-            if !corrections.isEmpty {
+            if !results.isEmpty {
                 VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
-                    Text("PER-DEVICE CORRECTION").font(DesignSystem.Typography.sectionHeader).foregroundStyle(.secondary)
-                    ForEach(corrections) { correction in
+                    Text("PER-DEVICE CORRECTION")
+                        .font(DesignSystem.Typography.sectionHeader)
+                        .foregroundStyle(.secondary)
+                    ForEach(results) { result in
                         HStack {
-                            Text(correction.name).font(DesignSystem.Typography.stripLabel)
+                            Text(result.deviceName)
+                                .font(DesignSystem.Typography.stripLabel)
+                                .foregroundStyle(result.wasMeasured ? .primary : .secondary)
                             Spacer(minLength: DesignSystem.Spacing.sm)
-                            Text(DesignSystem.Delay.formattedMilliseconds(correction.delay.milliseconds))
-                                .font(DesignSystem.Typography.readout)
-                                .foregroundStyle(.secondary)
+                            if result.wasMeasured {
+                                Text(DesignSystem.Delay.formattedMilliseconds(result.delayMilliseconds))
+                                    .font(DesignSystem.Typography.readout)
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                // Never render an unmeasured device as "0.0 ms" — that is
+                                // indistinguishable from a device that was measured and needed no
+                                // correction, which is the opposite of what happened.
+                                Text("not heard")
+                                    .font(DesignSystem.Typography.readout)
+                                    .foregroundStyle(DesignSystem.Colors.warning)
+                            }
                         }
                     }
                 }
@@ -190,12 +194,16 @@ struct CalibrationFlowView: View {
 
             if !skipped.isEmpty {
                 VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
-                    Text("SKIPPED \u{00B7} SET MANUALLY")
+                    Text("SET THESE MANUALLY")
                         .font(DesignSystem.Typography.sectionHeader)
                         .foregroundStyle(DesignSystem.Colors.warning)
-                    Text(skipped.joined(separator: ", "))
+                    Text("\(skipped.map(\.deviceName).joined(separator: ", ")) — the microphone could not hear "
+                         + (skipped.count == 1 ? "it" : "them") + ". "
+                         + "Headphones and earbuds never can be; a device with nothing plugged into it will not be either. "
+                         + "Any existing delay on \(skipped.count == 1 ? "it" : "them") was left untouched.")
                         .font(.callout)
                         .foregroundStyle(DesignSystem.Colors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
@@ -244,44 +252,49 @@ struct CalibrationFlowView: View {
 // MARK: - Previews
 
 #Preview("Idle") {
-    CalibrationFlowView(state: .idle, deviceCount: 3, corrections: [],
+    CalibrationFlowView(state: .idle, deviceCount: 3,
                         onStart: {}, onRetry: {}, onCancel: {}, onDone: {})
 }
 
 #Preview("Preparing") {
-    CalibrationFlowView(state: .preparing, deviceCount: 3, corrections: [],
+    CalibrationFlowView(state: .preparing, deviceCount: 3,
                         onStart: {}, onRetry: {}, onCancel: {}, onDone: {})
 }
 
 #Preview("Measuring") {
     CalibrationFlowView(
         state: .measuring(deviceName: "MacBook Pro Speakers", index: 2, total: 3),
-        deviceCount: 3, corrections: [],
+        deviceCount: 3,
         onStart: {}, onRetry: {}, onCancel: {}, onDone: {}
     )
 }
 
 #Preview("Analysing") {
-    CalibrationFlowView(state: .analysing, deviceCount: 3, corrections: [],
+    CalibrationFlowView(state: .analysing, deviceCount: 3,
                         onStart: {}, onRetry: {}, onCancel: {}, onDone: {})
 }
 
 #Preview("Failed") {
     CalibrationFlowView(
         state: .failed("The microphone recorded nothing. Grant UltraBass 9000 microphone access in System Settings \u{203A} Privacy & Security \u{203A} Microphone."),
-        deviceCount: 3, corrections: [],
+        deviceCount: 3,
         onStart: {}, onRetry: {}, onCancel: {}, onDone: {}
     )
 }
 
 #Preview("Succeeded") {
     CalibrationFlowView(
-        state: .succeeded(alignedDeviceCount: 2, spreadMilliseconds: 42.3, skipped: ["AirPods Pro"]),
+        state: .succeeded(
+            results: [
+                CalibrationResult(uid: "1", deviceName: "MacBook Pro Speakers",
+                                  delayMilliseconds: 0, confidence: 0.41, wasMeasured: true),
+                CalibrationResult(uid: "2", deviceName: "Living Room HomePod",
+                                  delayMilliseconds: 42.3, confidence: 0.33, wasMeasured: true),
+                CalibrationResult(uid: "3", deviceName: "AirPods Pro",
+                                  delayMilliseconds: 0, confidence: 0.04, wasMeasured: false),
+            ],
+            spreadMilliseconds: 42.3),
         deviceCount: 3,
-        corrections: [
-            DeviceCorrection(id: "1", name: "MacBook Pro Speakers", delay: DeviceDelay(milliseconds: 0, isAutomatic: true)),
-            DeviceCorrection(id: "2", name: "Living Room HomePod", delay: DeviceDelay(milliseconds: 42.3, isAutomatic: true)),
-        ],
         onStart: {}, onRetry: {}, onCancel: {}, onDone: {}
     )
 }

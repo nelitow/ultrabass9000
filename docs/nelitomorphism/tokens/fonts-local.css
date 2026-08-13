@@ -1,0 +1,14 @@
+/*
+ * Local replacement for the kit's tokens/fonts.css.
+ *
+ * The kit's original fonts.css is a single `@import` of Geist / Geist Mono
+ * from Google Fonts. This page has to work opened directly from disk and
+ * with no external network dependency, so instead of that CDN import we
+ * declare the same two font-role variables the kit expects
+ * (--font-ui, --font-mono) and point them at close system equivalents.
+ * Nothing else in the vendored token files changes.
+ */
+:root {
+  --font-ui: "Geist", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", "Menlo", "Cascadia Code", monospace;
+}

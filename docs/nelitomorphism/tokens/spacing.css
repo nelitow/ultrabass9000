@@ -1,0 +1,24 @@
+:root {
+  /* 4px grid, compact defaults */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --r-1: 6px;
+  --r-2: 10px;
+  --r-3: 14px;
+  --r-pill: 999px;
+  --control-h: 30px;      /* compact control height, fine pointers */
+  --control-h-lg: 38px;
+  --control-h-touch: 44px; /* coarse pointers — iOS/Android minimum hit area */
+  --pad-control: 0 12px;
+  /* device safe areas — pair with <meta name="viewport" content="...viewport-fit=cover"> */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+}

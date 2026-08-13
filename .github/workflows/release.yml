@@ -1,0 +1,133 @@
+name: Release
+
+# Every push to main is a release candidate: build, test, and — if the
+# derived tag doesn't already exist — publish a GitHub Release with the
+# built .app attached. See RELEASING.md for the full flow, including the
+# unsigned-build caveat and the macOS-26-runner situation this depends on.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  HOMEBREW_NO_AUTO_UPDATE: "1"
+
+jobs:
+  release:
+    name: Build, test, and release
+    # macos-26 provides Xcode 26.x with macOS SDKs 26.0-26.5, which is what
+    # this project's MACOSX_DEPLOYMENT_TARGET=26.0 needs. See RELEASING.md
+    # for how that was confirmed. Pinned explicitly rather than
+    # macos-latest so a future label rollover can't silently drop the SDK
+    # this project requires.
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history: needed for commit-count versioning and release notes
+          fetch-tags: true
+
+      - name: Verify macOS 26 SDK is available
+        run: |
+          xcodebuild -version
+          echo "--- installed macOS SDKs ---"
+          xcodebuild -showsdks | grep -i macos || true
+          if ! xcodebuild -showsdks | grep -qi 'macosx26'; then
+            echo "::error::No macOS 26.x SDK on this runner. UltraBass9000 needs it (MACOSX_DEPLOYMENT_TARGET=26.0 in project.yml). The runner image likely changed since RELEASING.md was written — see that file for what was true when this workflow was set up, and update the runs-on label once a suitable image exists."
+            exit 1
+          fi
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Derive version and release tag
+        id: version
+        run: ./scripts/derive-version.sh | tee -a "$GITHUB_OUTPUT"
+
+      - name: Check whether this tag was already released
+        id: tagcheck
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/${{ steps.version.outputs.tag }}" >/dev/null 2>&1; then
+            echo "Tag ${{ steps.version.outputs.tag }} already exists on origin — skipping release for this run."
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run tests (Release configuration, CI signing overrides)
+        if: steps.tagcheck.outputs.exists != 'true'
+        run: |
+          xcodebuild \
+            -project UltraBass9000.xcodeproj \
+            -scheme UltraBass9000 \
+            -configuration Release \
+            -destination 'platform=macOS' \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            DEVELOPMENT_TEAM="" \
+            test
+          # The UltraBass9000Tests target depends on the UltraBass9000 app
+          # target, so this also builds the Release .app we're about to
+          # ship — no separate `build` invocation, one compile total.
+
+      - name: Locate built .app
+        if: steps.tagcheck.outputs.exists != 'true'
+        id: app
+        run: |
+          app_path="build/Build/Products/Release/UltraBass9000.app"
+          if [[ ! -d "$app_path" ]]; then
+            echo "::error::Expected app bundle not found at $app_path after a successful test run. Build layout may have changed."
+            exit 1
+          fi
+          echo "app_path=$app_path" >> "$GITHUB_OUTPUT"
+
+      - name: Package release zip
+        if: steps.tagcheck.outputs.exists != 'true'
+        id: package
+        run: |
+          zip_path="build/${{ steps.version.outputs.zip_name }}"
+          ./scripts/package-app.sh "${{ steps.app.outputs.app_path }}" "$zip_path"
+          echo "zip_path=$zip_path" >> "$GITHUB_OUTPUT"
+
+      - name: Generate release notes
+        if: steps.tagcheck.outputs.exists != 'true'
+        id: notes
+        run: ./scripts/release-notes.sh "${{ steps.version.outputs.tag }}" > release-notes.md
+
+      - name: Create GitHub release
+        if: steps.tagcheck.outputs.exists != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.version.outputs.tag }}" \
+            "${{ steps.package.outputs.zip_path }}" \
+            --title "UltraBass9000 ${{ steps.version.outputs.tag }}" \
+            --notes-file release-notes.md \
+            --target "${{ github.sha }}"
+
+      - name: Summary
+        if: always()
+        run: |
+          if [[ "${{ steps.tagcheck.outputs.exists }}" == "true" ]]; then
+            echo "### Skipped: tag \`${{ steps.version.outputs.tag }}\` already released" >> "$GITHUB_STEP_SUMMARY"
+          elif [[ "${{ job.status }}" == "success" ]]; then
+            echo "### Released \`${{ steps.version.outputs.tag }}\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "https://github.com/${{ github.repository }}/releases/tag/${{ steps.version.outputs.tag }}" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### Release run failed before publishing \`${{ steps.version.outputs.tag || '(version not derived)' }}\`" >> "$GITHUB_STEP_SUMMARY"
+          fi

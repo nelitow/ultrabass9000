@@ -1,0 +1,10 @@
+:root {
+  --glow-accent: 0 0 0 1px oklch(0.82 0.15 195 / 0.35), 0 0 24px oklch(0.82 0.15 195 / 0.25);
+  --glow-accent-2: 0 0 0 1px oklch(0.82 0.15 305 / 0.35), 0 0 24px oklch(0.82 0.15 305 / 0.25);
+  --shadow-raise: 0 1px 0 oklch(1 0 0 / 0.06) inset, 0 8px 24px oklch(0 0 0 / 0.45);
+  --shadow-overlay: 0 1px 0 oklch(1 0 0 / 0.08) inset, 0 24px 64px oklch(0 0 0 / 0.6);
+  --glass-bg: oklch(0.18 0.016 250 / 0.72);
+  --glass-blur: 16px;
+  --focus-ring: 0 0 0 1px var(--surface-page), 0 0 0 3px var(--edge-focus);
+  --scanline: repeating-linear-gradient(0deg, transparent 0 2px, oklch(1 0 0 / 0.012) 2px 3px);
+}

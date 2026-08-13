@@ -140,6 +140,74 @@ enum BiquadDesign {
         )
     }
 
+    // MARK: - Cascades with a defined slope
+
+    /// Q of one section of a Butterworth cascade.
+    ///
+    /// A Butterworth response of order `n` factors into `n/2` biquads whose corner frequencies all
+    /// coincide but whose Qs differ. Giving every section 0.707 instead — the obvious mistake —
+    /// produces a droopy, over-damped knee rather than the maximally flat passband the name
+    /// promises, and the stated dB/octave then only holds far from the corner.
+    ///
+    /// - Parameters:
+    ///   - order: total filter order. 2 → 12 dB/oct, 4 → 24, 6 → 36, 8 → 48.
+    ///   - section: 1-based index of the section within the cascade.
+    static func butterworthQ(order: Int, section: Int) -> Double {
+        guard order >= 2, section >= 1, section <= order / 2 else { return 1 / 2.0.squareRoot() }
+        return 1 / (2 * sin(Double(2 * section - 1) * .pi / Double(2 * order)))
+    }
+
+    /// First-order low-pass, via the bilinear transform. 6 dB/octave.
+    static func firstOrderLowPass(frequency: Double, sampleRate: Double) -> BiquadCoefficients {
+        let w0 = clampedOmega(frequency: frequency, sampleRate: sampleRate)
+        let k = tan(w0 / 2)
+        return normalise(b0: k, b1: k, b2: 0, a0: 1 + k, a1: k - 1, a2: 0)
+    }
+
+    /// First-order high-pass, via the bilinear transform. 6 dB/octave.
+    static func firstOrderHighPass(frequency: Double, sampleRate: Double) -> BiquadCoefficients {
+        let w0 = clampedOmega(frequency: frequency, sampleRate: sampleRate)
+        let k = tan(w0 / 2)
+        return normalise(b0: 1, b1: -1, b2: 0, a0: 1 + k, a1: k - 1, a2: 0)
+    }
+
+    /// Low-pass of the requested order, as a cascade of biquads (plus one first-order section when
+    /// the order is odd).
+    static func lowPassCascade(frequency: Double, order: Int, sampleRate: Double) -> [BiquadCoefficients] {
+        cascade(order: order) { q in
+            lowPass(frequency: frequency, q: q, sampleRate: sampleRate)
+        } firstOrder: {
+            firstOrderLowPass(frequency: frequency, sampleRate: sampleRate)
+        }
+    }
+
+    /// High-pass of the requested order.
+    static func highPassCascade(frequency: Double, order: Int, sampleRate: Double) -> [BiquadCoefficients] {
+        cascade(order: order) { q in
+            highPass(frequency: frequency, q: q, sampleRate: sampleRate)
+        } firstOrder: {
+            firstOrderHighPass(frequency: frequency, sampleRate: sampleRate)
+        }
+    }
+
+    private static func cascade(order: Int,
+                                secondOrder: (Double) -> BiquadCoefficients,
+                                firstOrder: () -> BiquadCoefficients) -> [BiquadCoefficients] {
+        let order = max(1, order)
+        var sections: [BiquadCoefficients] = []
+        sections.reserveCapacity((order + 1) / 2)
+        // `1...(order / 2)` is an invalid range at order 1, and a `where` clause does not stop the
+        // range being constructed — it traps before the loop body is ever consulted.
+        let biquadCount = order / 2
+        if biquadCount >= 1 {
+            for section in 1...biquadCount {
+                sections.append(secondOrder(butterworthQ(order: order, section: section)))
+            }
+        }
+        if order % 2 == 1 { sections.append(firstOrder()) }
+        return sections
+    }
+
     /// Divides through by `a0` and refuses to emit anything the render thread could blow up on.
     private static func normalise(b0: Double, b1: Double, b2: Double,
                                   a0: Double, a1: Double, a2: Double) -> BiquadCoefficients {

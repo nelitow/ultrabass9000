@@ -1,0 +1,24 @@
+* { box-sizing: border-box; }
+html { color-scheme: dark; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--surface-page);
+  color: var(--text-body);
+  font-family: var(--font-ui);
+  font-size: var(--text-base);
+  line-height: var(--leading-body);
+  -webkit-font-smoothing: antialiased;
+  touch-action: manipulation;      /* no 300ms tap delay, no double-tap zoom */
+  overscroll-behavior-y: none;
+}
+a { color: var(--accent); text-decoration: none; transition: opacity var(--dur-1) var(--ease-out); }
+a:hover { opacity: 0.8; }
+::selection { background: var(--accent-dim); color: var(--fg-1); }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--edge-2); border-radius: 999px; border: 3px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* Coarse pointers: thin scrollbars are unusable and unnecessary — the OS draws its own. */
+@media (pointer: coarse) {
+  ::-webkit-scrollbar { width: 0; height: 0; }
+}

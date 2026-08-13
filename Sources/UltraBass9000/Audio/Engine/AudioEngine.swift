@@ -26,13 +26,31 @@ struct DeviceDelay: Codable, Equatable {
     static let none = DeviceDelay()
 }
 
+/// What auto-sync concluded about one device.
+///
+/// Carried through explicitly rather than letting the UI rejoin results to devices by display name.
+/// A name-based join silently mislabels a device whenever the join misses, and the failure looks
+/// like a device that was measured and needs no correction — indistinguishable, on screen, from one
+/// that was never heard at all.
+struct CalibrationResult: Equatable, Identifiable {
+    let uid: String
+    let deviceName: String
+    let delayMilliseconds: Double
+    let confidence: Double
+    /// False when the sweep was not heard clearly enough to trust — headphones, a device that is
+    /// not physically connected to speakers, or a room too noisy at that moment.
+    let wasMeasured: Bool
+
+    var id: String { uid }
+}
+
 enum CalibrationState: Equatable {
     case idle
     case preparing
     case measuring(deviceName: String, index: Int, total: Int)
     case analysing
     case failed(String)
-    case succeeded(alignedDeviceCount: Int, spreadMilliseconds: Double, skipped: [String])
+    case succeeded(results: [CalibrationResult], spreadMilliseconds: Double)
 
     var isRunning: Bool {
         switch self {
@@ -46,21 +64,31 @@ enum CalibrationState: Equatable {
 enum EngineDiagnostic: Equatable, Identifiable {
     /// The tap has produced nothing but digital silence for long enough that a denied
     /// audio-capture permission is the likeliest explanation. Core Audio offers no way to ask.
-    case permissionLikelyDenied
+    /// Advisory, not a fault: nothing has been captured *yet*. Offered once, and only until the
+    /// tap delivers its first sample.
+    case noAudioYet
     case noOutputsSelected
     case deviceDisappeared(String)
 
     var id: String {
         switch self {
-        case .permissionLikelyDenied: return "permission"
+        case .noAudioYet: return "no-audio-yet"
         case .noOutputsSelected: return "no-outputs"
         case .deviceDisappeared(let name): return "gone-\(name)"
         }
     }
 
+    /// Advisories are informational and should not be dressed as warnings.
+    var isAdvisory: Bool {
+        switch self {
+        case .noAudioYet: return true
+        case .noOutputsSelected, .deviceDisappeared: return false
+        }
+    }
+
     var title: String {
         switch self {
-        case .permissionLikelyDenied: return "No audio is reaching UltraBass"
+        case .noAudioYet: return "Nothing captured yet"
         case .noOutputsSelected: return "Pick at least one output"
         case .deviceDisappeared(let name): return "\(name) disappeared"
         }
@@ -68,8 +96,8 @@ enum EngineDiagnostic: Equatable, Identifiable {
 
     var detail: String {
         switch self {
-        case .permissionLikelyDenied:
-            return "The system tap is returning silence. Grant UltraBass 9000 audio recording access in System Settings › Privacy & Security › Microphone, then start again."
+        case .noAudioYet:
+            return "Play something to check the routing. If the meters stay flat while audio is playing, UltraBass 9000 may not be allowed to record audio — check System Settings › Privacy & Security."
         case .noOutputsSelected:
             return "Choose the devices you want to play to in the sidebar."
         case .deviceDisappeared(let name):
@@ -139,6 +167,8 @@ final class AudioEngine {
     private var sampleRate: Double = 48_000
     private var layoutVerified = false
     private var meterLogTicks = 0
+    /// Set the first time the tap delivers a non-silent sample, which proves capture permission.
+    private var hasEverReceivedAudio = false
 
     private let logger = Logger(subsystem: "com.nelitojr.UltraBass9000", category: "AudioEngine")
     private let defaults = UserDefaults.standard
@@ -235,7 +265,10 @@ final class AudioEngine {
     func setProcessing(_ processing: DeviceProcessing, for uid: String) {
         deviceProcessing[uid] = processing.normalised
         publishFilters()
-        persist()
+        // Deferred: dragging an EQ handle calls this on every mouse move, and encoding the whole
+        // processing dictionary to JSON and writing it to UserDefaults sixty times a second is
+        // enough main-thread work to make the curve stutter while it is being dragged.
+        schedulePersist()
     }
 
     func resetProcessing(for uid: String) {
@@ -366,12 +399,22 @@ final class AudioEngine {
                 milliseconds: min(measurement.delaySeconds * 1000, maximumDelayMilliseconds),
                 isAutomatic: true)
         }
+        // A device that was not heard keeps whatever delay it already had. Zeroing it would quietly
+        // undo a manual offset the user dialled in precisely because it cannot be measured.
         applyDelays()
         persist()
 
-        calibration = .succeeded(alignedDeviceCount: outcome.succeeded.count,
-                                 spreadMilliseconds: outcome.spreadSeconds * 1000,
-                                 skipped: outcome.skipped.map(\.deviceName))
+        let results = outcome.measurements.map { measurement in
+            CalibrationResult(uid: measurement.uid,
+                              deviceName: measurement.deviceName,
+                              delayMilliseconds: measurement.succeeded
+                                  ? measurement.delaySeconds * 1000
+                                  : (deviceDelays[measurement.uid]?.milliseconds ?? 0),
+                              confidence: Double(measurement.confidence),
+                              wasMeasured: measurement.succeeded)
+        }
+        calibration = .succeeded(results: results,
+                                 spreadMilliseconds: outcome.spreadSeconds * 1000)
     }
 
     /// Compiles every active device's chain and hands the whole set to the render thread at once.
@@ -573,15 +616,34 @@ final class AudioEngine {
         }
     }
 
-    /// Five seconds of pure digital silence while the engine believes it is running is the only
-    /// evidence available that audio-capture permission was refused.
+    /// Decides whether the app has any business complaining about silence.
+    ///
+    /// There is no API to ask whether audio-capture permission was granted; a refused tap just
+    /// delivers zeros forever, which looks exactly like nobody playing anything. Two approaches
+    /// were tried and rejected:
+    ///
+    /// - Warning after N seconds of silence. Fires constantly during normal use, and a warning that
+    ///   cries wolf is worse than none.
+    /// - Warning when silence coincides with another process running output.
+    ///   `kAudioProcessPropertyIsRunningOutput` reports an open output *stream*, not audible sound;
+    ///   two processes report true on a completely idle machine, so this is the first test all over
+    ///   again wearing a disguise.
+    ///
+    /// What remains is the one asymmetry that holds: once the tap has delivered a single non-silent
+    /// sample, permission is proven and the question is settled forever. So the hint is offered only
+    /// while the tap has *never* produced audio, and it is advisory rather than an error.
     private func checkForSilentTap() {
-        guard !diagnostics.contains(.permissionLikelyDenied) else { return }
-        let silentFrames = control.silentInputFrames.pointee
-        guard control.renderCycles.pointee > 0 else { return }
-        if Double(silentFrames) > sampleRate * 5 {
-            diagnostics.append(.permissionLikelyDenied)
+        guard !hasEverReceivedAudio else { return }
+
+        if control.silentInputFrames.pointee == 0, control.renderCycles.pointee > 0 {
+            hasEverReceivedAudio = true
+            diagnostics.removeAll { $0 == .noAudioYet }
+            return
         }
+
+        guard !diagnostics.contains(.noAudioYet) else { return }
+        guard Double(control.silentInputFrames.pointee) > sampleRate * 20 else { return }
+        diagnostics.append(.noAudioYet)
     }
 
     // MARK: - Persistence
@@ -604,6 +666,19 @@ final class AudioEngine {
     /// that first line reads what we just clobbered. Settings appeared to save and then silently
     /// reset on every launch.
     private var isRestoring = false
+
+    private var persistTask: Task<Void, Never>?
+
+    /// Coalesces rapid settings changes into one write shortly after the user stops moving.
+    private func schedulePersist() {
+        guard !isRestoring else { return }
+        persistTask?.cancel()
+        persistTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled else { return }
+            self?.persist()
+        }
+    }
 
     private func persist() {
         guard !isRestoring else { return }

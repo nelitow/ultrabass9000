@@ -45,13 +45,14 @@ final class DeviceProcessingTests: XCTestCase {
         processing.bandPass.isEnabled = true
 
         let chain = processing.compile(sampleRate: sampleRate)
-        XCTAssertEqual(chain.count, 4)
+        // 1 EQ band + high-pass (1) + low-pass (1) + band-pass (1 + 1, its two edges).
+        XCTAssertEqual(chain.count, 5)
 
         // The three filters occupy the last three slots, in HP, LP, BP order.
-        let expectedHighPass = BiquadDesign.highPass(frequency: processing.highPass.frequency,
-                                                     q: processing.highPass.q,
-                                                     sampleRate: sampleRate)
-        XCTAssertEqual(chain[1], expectedHighPass)
+        let expectedHighPass = BiquadDesign.highPassCascade(frequency: processing.highPass.frequency,
+                                                            order: processing.highPass.slope.order,
+                                                            sampleRate: sampleRate)
+        XCTAssertEqual(chain[1], expectedHighPass[0])
     }
 
     func testEveryBandAndFilterFitsWithinTheHardwareSectionLimit() {
@@ -83,7 +84,7 @@ final class DeviceProcessingTests: XCTestCase {
     /// while hearing a high-pass.
     func testResponseIncludesTheFilterSections() {
         var processing = DeviceProcessing.neutral
-        processing.highPass = FilterSetting(isEnabled: true, frequency: 1_000, q: 0.7071)
+        processing.highPass = FilterSetting(isEnabled: true, frequency: 1_000, slope: .db12)
         let response = processing.magnitudeResponse(at: [100, 1_000], sampleRate: sampleRate)
         XCTAssertLessThan(response[0], -35)
         XCTAssertEqual(response[1], -3.01, accuracy: 0.15)
@@ -97,7 +98,7 @@ final class DeviceProcessingTests: XCTestCase {
                                                         gainDB: 3, q: 1, isEnabled: true)],
                                          highPass: FilterSetting(isEnabled: false, frequency: 80),
                                          lowPass: FilterSetting(isEnabled: false, frequency: 12_000),
-                                         bandPass: FilterSetting(isEnabled: false, frequency: 1_000))
+                                         bandPass: BandPassSetting(isEnabled: false))
         let repaired = truncated.normalised
         XCTAssertEqual(repaired.bands.count, DeviceProcessing.bandCount)
         XCTAssertEqual(repaired.bands.map(\.id), Array(0..<DeviceProcessing.bandCount))
@@ -121,7 +122,7 @@ final class DeviceProcessingTests: XCTestCase {
         var processing = DeviceProcessing.neutral
         processing.bands[3] = EQBand(id: 3, kind: .highShelf, frequency: 6_000, gainDB: -4.5,
                                      q: 1.2, isEnabled: true)
-        processing.lowPass = FilterSetting(isEnabled: true, frequency: 8_000, q: 1.1)
+        processing.lowPass = FilterSetting(isEnabled: true, frequency: 8_000, slope: .db24)
 
         let data = try JSONEncoder().encode(["device": processing])
         let decoded = try JSONDecoder().decode([String: DeviceProcessing].self, from: data)

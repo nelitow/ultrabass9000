@@ -48,19 +48,142 @@ struct EQBand: Codable, Equatable, Identifiable {
     var isTransparent: Bool { !isEnabled || abs(gainDB) < 0.01 }
 }
 
+/// Steepness of a high-pass or low-pass, in decibels per octave.
+///
+/// Expressed as slope rather than Q because that is the number a crossover is actually specified
+/// by: "the sub takes everything below 120 Hz at 24 dB/oct" is a sentence someone can act on, where
+/// "Q = 1.31 on section two of a fourth-order cascade" is the same filter described uselessly.
+enum FilterSlope: Int, Codable, CaseIterable, Identifiable {
+    case db6 = 6
+    case db12 = 12
+    case db24 = 24
+    case db36 = 36
+    case db48 = 48
+
+    var id: Int { rawValue }
+
+    /// Filter order. Every 6 dB/oct is one order.
+    var order: Int { rawValue / 6 }
+
+    /// Biquads needed. A first-order section still occupies one.
+    var sectionCount: Int { (order + 1) / 2 }
+
+    var displayName: String { "\(rawValue) dB/oct" }
+}
+
+/// A single-sided filter: everything above a corner, or everything below it.
 struct FilterSetting: Codable, Equatable {
     var isEnabled: Bool = false
     var frequency: Double
-    var q: Double = 0.707
-
-    static let qRange: ClosedRange<Double> = 0.1...8
+    var slope: FilterSlope = .db12
 
     var clamped: FilterSetting {
         var setting = self
         setting.frequency = min(max(frequency, EQBand.frequencyRange.lowerBound),
                                 EQBand.frequencyRange.upperBound)
-        setting.q = min(max(q, Self.qRange.lowerBound), Self.qRange.upperBound)
         return setting
+    }
+
+    // Migration: older builds stored a `q` and had no `slope`. Decoding with defaults keeps a
+    // user's saved setup working across the upgrade instead of silently discarding all of it.
+    private enum CodingKeys: String, CodingKey { case isEnabled, frequency, slope }
+
+    init(isEnabled: Bool = false, frequency: Double, slope: FilterSlope = .db12) {
+        self.isEnabled = isEnabled
+        self.frequency = frequency
+        self.slope = slope
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        isEnabled = try container.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? false
+        frequency = try container.decodeIfPresent(Double.self, forKey: .frequency) ?? 1_000
+        slope = try container.decodeIfPresent(FilterSlope.self, forKey: .slope) ?? .db12
+    }
+}
+
+/// A band of frequencies to keep, expressed the way a crossover is: a lower edge, an upper edge,
+/// and how steeply it falls away outside them.
+///
+/// Modelled as a high-pass and a low-pass in series rather than a single resonant biquad. One
+/// biquad can only give a fixed 6 dB/oct skirt whose width is set indirectly by Q, which cannot
+/// express "keep 80 Hz to 2 kHz and drop everything else at 24 dB/oct".
+struct BandPassSetting: Codable, Equatable {
+    var isEnabled: Bool = false
+    /// Lower edge — the high-pass corner.
+    var lowFrequency: Double = 200
+    /// Upper edge — the low-pass corner.
+    var highFrequency: Double = 4_000
+    var slope: FilterSlope = .db12
+
+    /// Keeps the edges the right way round and at least a little apart.
+    ///
+    /// A band whose edges cross over would silently become a notch — filters do not care that the
+    /// user meant a band — so the pair is ordered and separated here instead.
+    var clamped: BandPassSetting {
+        var setting = self
+        let low = min(max(lowFrequency, EQBand.frequencyRange.lowerBound),
+                      EQBand.frequencyRange.upperBound)
+        let high = min(max(highFrequency, EQBand.frequencyRange.lowerBound),
+                       EQBand.frequencyRange.upperBound)
+        setting.lowFrequency = min(low, high)
+        setting.highFrequency = max(low, high)
+        // Never narrower than a quarter octave, so the band always passes something.
+        let minimumRatio = pow(2.0, 0.25)
+        if setting.highFrequency < setting.lowFrequency * minimumRatio {
+            setting.highFrequency = min(setting.lowFrequency * minimumRatio,
+                                        EQBand.frequencyRange.upperBound)
+        }
+        return setting
+    }
+
+    var widthInOctaves: Double {
+        let setting = clamped
+        guard setting.lowFrequency > 0 else { return 0 }
+        return log2(setting.highFrequency / setting.lowFrequency)
+    }
+
+    private enum CodingKeys: String, CodingKey { case isEnabled, lowFrequency, highFrequency, slope, frequency, q }
+
+    init(isEnabled: Bool = false,
+         lowFrequency: Double = 200,
+         highFrequency: Double = 4_000,
+         slope: FilterSlope = .db12) {
+        self.isEnabled = isEnabled
+        self.lowFrequency = lowFrequency
+        self.highFrequency = highFrequency
+        self.slope = slope
+    }
+
+    /// Migrates the old centre-frequency-and-Q representation by converting it to the equivalent
+    /// pair of edges, so an existing band-pass keeps roughly the sound it had.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        isEnabled = try container.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? false
+        slope = try container.decodeIfPresent(FilterSlope.self, forKey: .slope) ?? .db12
+
+        if let low = try container.decodeIfPresent(Double.self, forKey: .lowFrequency),
+           let high = try container.decodeIfPresent(Double.self, forKey: .highFrequency) {
+            lowFrequency = low
+            highFrequency = high
+        } else {
+            let centre = try container.decodeIfPresent(Double.self, forKey: .frequency) ?? 1_000
+            let q = try container.decodeIfPresent(Double.self, forKey: .q) ?? 1
+            // Bandwidth in octaves for a resonant band-pass of a given Q.
+            let bandwidth = max(0.25, 1 / max(q, 0.1))
+            lowFrequency = centre / pow(2, bandwidth / 2)
+            highFrequency = centre * pow(2, bandwidth / 2)
+        }
+    }
+
+    /// Written explicitly because `CodingKeys` carries the legacy `frequency`/`q` keys for reading,
+    /// and those have no corresponding property to synthesise an encoder from.
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(isEnabled, forKey: .isEnabled)
+        try container.encode(lowFrequency, forKey: .lowFrequency)
+        try container.encode(highFrequency, forKey: .highFrequency)
+        try container.encode(slope, forKey: .slope)
     }
 }
 
@@ -72,7 +195,7 @@ struct DeviceProcessing: Codable, Equatable {
     var bands: [EQBand]
     var highPass: FilterSetting
     var lowPass: FilterSetting
-    var bandPass: FilterSetting
+    var bandPass: BandPassSetting
 
     static let bandCount = 5
 
@@ -92,7 +215,7 @@ struct DeviceProcessing: Codable, Equatable {
             },
             highPass: FilterSetting(isEnabled: false, frequency: 80),
             lowPass: FilterSetting(isEnabled: false, frequency: 12_000),
-            bandPass: FilterSetting(isEnabled: false, frequency: 1_000, q: 1.0)
+            bandPass: BandPassSetting(isEnabled: false, lowFrequency: 200, highFrequency: 4_000)
         )
     }
 
@@ -158,24 +281,38 @@ struct DeviceProcessing: Codable, Equatable {
 
         if highPass.isEnabled {
             let setting = highPass.clamped
-            sections.append(BiquadDesign.highPass(frequency: setting.frequency,
-                                                  q: setting.q,
-                                                  sampleRate: sampleRate))
+            sections.append(contentsOf: BiquadDesign.highPassCascade(frequency: setting.frequency,
+                                                                     order: setting.slope.order,
+                                                                     sampleRate: sampleRate))
         }
         if lowPass.isEnabled {
             let setting = lowPass.clamped
-            sections.append(BiquadDesign.lowPass(frequency: setting.frequency,
-                                                 q: setting.q,
-                                                 sampleRate: sampleRate))
+            sections.append(contentsOf: BiquadDesign.lowPassCascade(frequency: setting.frequency,
+                                                                    order: setting.slope.order,
+                                                                    sampleRate: sampleRate))
         }
         if bandPass.isEnabled {
+            // A band is a high-pass at its lower edge followed by a low-pass at its upper edge.
             let setting = bandPass.clamped
-            sections.append(BiquadDesign.bandPass(frequency: setting.frequency,
-                                                  q: setting.q,
-                                                  sampleRate: sampleRate))
+            sections.append(contentsOf: BiquadDesign.highPassCascade(frequency: setting.lowFrequency,
+                                                                     order: setting.slope.order,
+                                                                     sampleRate: sampleRate))
+            sections.append(contentsOf: BiquadDesign.lowPassCascade(frequency: setting.highFrequency,
+                                                                    order: setting.slope.order,
+                                                                    sampleRate: sampleRate))
         }
 
         return sections
+    }
+
+    /// Biquads this configuration needs. Compared against `FilterBank.maxSections` by the tests, so
+    /// a new filter type cannot quietly overflow the render thread's fixed-size chain.
+    var sectionCount: Int {
+        var count = eqEnabled ? bands.filter { !$0.isTransparent }.count : 0
+        if highPass.isEnabled { count += highPass.slope.sectionCount }
+        if lowPass.isEnabled { count += lowPass.slope.sectionCount }
+        if bandPass.isEnabled { count += bandPass.slope.sectionCount * 2 }
+        return count
     }
 
     /// Combined magnitude response in dB, for drawing the curve.

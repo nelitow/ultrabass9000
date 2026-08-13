@@ -1,0 +1,11 @@
+:root {
+  /* signature easings — every transition is choreographed */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: linear(0, 0.0087, 0.0343 2.3%, 0.1352 4.9%, 0.7873 13.5%, 0.9668, 1.0824 19.9%, 1.1119, 1.1259 24%, 1.1231 26.7%, 1.0665 34.7%, 0.9971 45.5%, 0.9855 51.3%, 0.9982 71.4%, 1);
+  --dur-1: 120ms;  /* press, hover */
+  --dur-2: 260ms;  /* state change */
+  --dur-3: 480ms;  /* enter/exit, resolve */
+  --dur-4: 900ms;  /* content materialize */
+  --stagger: 40ms; /* per-item cascade */
+}

@@ -9,8 +9,10 @@ import Foundation
 /// frequently unstable, and an unstable biquad is a full-scale squeal into someone's speakers.
 final class FilterBank {
     static let maxDevices = RenderControlBlock.maxDevices
-    /// Five EQ bands plus high-pass, low-pass and band-pass.
-    static let maxSections = 8
+    /// Worst case: 5 EQ bands, plus a 48 dB/oct high-pass (4 biquads), a 48 dB/oct low-pass (4),
+    /// and a 48 dB/oct band-pass, which is a high-pass and a low-pass cascade together (8). That is
+    /// 21; the rest is headroom. `DeviceProcessingTests` asserts the budget still fits.
+    static let maxSections = 24
     static let maxChannels = 2
     static let coefficientsPerSection = 5
 

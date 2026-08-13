@@ -253,6 +253,12 @@ struct EQEditor: View {
                 }
             }
             .clipped()
+            // The curve is redrawn from scratch on every gesture tick while the handles move via
+            // `.position`. Any implicit animation inherited from an ancestor — a sheet transition,
+            // a `withAnimation` further up — interpolates those two independently, so the curve
+            // lags a frame behind the handle it belongs to and the whole plot appears to flicker.
+            // Both must land in the same frame, unanimated.
+            .transaction { $0.animation = nil }
         }
         .background(DesignSystem.Colors.panel, in: RoundedRectangle(cornerRadius: DesignSystem.Metrics.smallCornerRadius))
         .overlay(

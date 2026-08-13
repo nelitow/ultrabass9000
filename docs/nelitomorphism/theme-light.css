@@ -1,0 +1,100 @@
+/*
+ * Light-appearance token overrides for Nelitomorphism.
+ *
+ * The kit itself is declared dark-only ("Dark only. Never invent a light
+ * theme." — SKILL.md). This landing page needs a correct light appearance
+ * too, so this file derives one from the kit's own structural logic rather
+ * than inventing a different visual language:
+ *
+ *   - Same 4-step elevation ramp, same direction (page is the least-elevated
+ *     surface, overlay the most, and each step gets lighter) — just remapped
+ *     onto a near-white base instead of a near-black one.
+ *   - Same two accent hues (195 cyan, 305 violet) at the same chroma, with
+ *     lightness pulled down so they hold contrast on a light surface instead
+ *     of a dark one.
+ *   - Edges flip from white-alpha hairlines to black-alpha hairlines (same
+ *     idea: a 1px translucent line, not a shadow-drawn border).
+ *   - Shadows/glass/glow keep the same construction (inset top hairline +
+ *     ambient shadow; blurred glass fill; ring + glow around the accent)
+ *     with the polarity and alpha reworked for a light background.
+ *
+ * Applied two ways: automatically via prefers-color-scheme for users who
+ * haven't chosen, and forced via [data-theme] for the page's own toggle
+ * (see js/theme.js) or for anyone testing both appearances explicitly.
+ */
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg-0: oklch(0.965 0.006 250);
+  --bg-1: oklch(0.978 0.005 250);
+  --bg-2: oklch(0.99 0.004 250);
+  --bg-3: oklch(1 0 0);
+
+  --edge-1: oklch(0.2 0.02 250 / 0.10);
+  --edge-2: oklch(0.2 0.02 250 / 0.18);
+  --edge-focus: oklch(0.55 0.16 195 / 0.55);
+
+  --fg-1: oklch(0.22 0.018 250);
+  --fg-2: oklch(0.46 0.016 250);
+  --fg-3: oklch(0.62 0.014 250);
+
+  --accent: oklch(0.56 0.16 195);
+  --accent-2: oklch(0.56 0.16 305);
+  --accent-dim: oklch(0.56 0.16 195 / 0.12);
+  --accent-2-dim: oklch(0.56 0.16 305 / 0.12);
+  --on-accent: oklch(0.99 0.01 195);
+
+  --ok: oklch(0.52 0.14 160);
+  --warn: oklch(0.56 0.15 85);
+  --danger: oklch(0.55 0.19 25);
+  --ok-dim: oklch(0.52 0.14 160 / 0.12);
+  --warn-dim: oklch(0.56 0.15 85 / 0.12);
+  --danger-dim: oklch(0.55 0.19 25 / 0.12);
+
+  --glow-accent: 0 0 0 1px oklch(0.56 0.16 195 / 0.4), 0 0 20px oklch(0.56 0.16 195 / 0.16);
+  --glow-accent-2: 0 0 0 1px oklch(0.56 0.16 305 / 0.4), 0 0 20px oklch(0.56 0.16 305 / 0.16);
+  --shadow-raise: 0 1px 0 oklch(1 0 0 / 0.7) inset, 0 8px 20px oklch(0.32 0.02 250 / 0.10);
+  --shadow-overlay: 0 1px 0 oklch(1 0 0 / 0.8) inset, 0 24px 56px oklch(0.32 0.02 250 / 0.16);
+  --glass-bg: oklch(0.99 0.004 250 / 0.75);
+  --scanline: repeating-linear-gradient(0deg, transparent 0 2px, oklch(0 0 0 / 0.015) 2px 3px);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+
+    --bg-0: oklch(0.965 0.006 250);
+    --bg-1: oklch(0.978 0.005 250);
+    --bg-2: oklch(0.99 0.004 250);
+    --bg-3: oklch(1 0 0);
+
+    --edge-1: oklch(0.2 0.02 250 / 0.10);
+    --edge-2: oklch(0.2 0.02 250 / 0.18);
+    --edge-focus: oklch(0.55 0.16 195 / 0.55);
+
+    --fg-1: oklch(0.22 0.018 250);
+    --fg-2: oklch(0.46 0.016 250);
+    --fg-3: oklch(0.62 0.014 250);
+
+    --accent: oklch(0.56 0.16 195);
+    --accent-2: oklch(0.56 0.16 305);
+    --accent-dim: oklch(0.56 0.16 195 / 0.12);
+    --accent-2-dim: oklch(0.56 0.16 305 / 0.12);
+    --on-accent: oklch(0.99 0.01 195);
+
+    --ok: oklch(0.52 0.14 160);
+    --warn: oklch(0.56 0.15 85);
+    --danger: oklch(0.55 0.19 25);
+    --ok-dim: oklch(0.52 0.14 160 / 0.12);
+    --warn-dim: oklch(0.56 0.15 85 / 0.12);
+    --danger-dim: oklch(0.55 0.19 25 / 0.12);
+
+    --glow-accent: 0 0 0 1px oklch(0.56 0.16 195 / 0.4), 0 0 20px oklch(0.56 0.16 195 / 0.16);
+    --glow-accent-2: 0 0 0 1px oklch(0.56 0.16 305 / 0.4), 0 0 20px oklch(0.56 0.16 305 / 0.16);
+    --shadow-raise: 0 1px 0 oklch(1 0 0 / 0.7) inset, 0 8px 20px oklch(0.32 0.02 250 / 0.10);
+    --shadow-overlay: 0 1px 0 oklch(1 0 0 / 0.8) inset, 0 24px 56px oklch(0.32 0.02 250 / 0.16);
+    --glass-bg: oklch(0.99 0.004 250 / 0.75);
+    --scanline: repeating-linear-gradient(0deg, transparent 0 2px, oklch(0 0 0 / 0.015) 2px 3px);
+  }
+}

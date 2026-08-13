@@ -1,0 +1,19 @@
+:root {
+  --font-ui: "Geist", system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, monospace;
+  /* compact scale */
+  --text-xs: 11px;
+  --text-sm: 12.5px;
+  --text-base: 13.5px;
+  --text-md: 15px;
+  --text-lg: clamp(16px, 3.6vw, 18px);
+  --text-xl: clamp(20px, 5vw, 24px);
+  --text-display: clamp(26px, 8vw, 34px);
+  --leading-tight: 1.2;
+  --leading-body: 1.5;
+  --track-wide: 0.08em;   /* uppercase labels */
+  --track-tight: -0.01em; /* display */
+  --weight-body: 400;
+  --weight-medium: 500;
+  --weight-strong: 600;
+}
