@@ -2,7 +2,7 @@ import Accelerate
 import Foundation
 
 /// One point on a measured frequency response.
-struct ResponsePoint: Equatable, Identifiable {
+struct ResponsePoint: Equatable, Identifiable, Codable {
     let frequency: Double
     let decibels: Double
 

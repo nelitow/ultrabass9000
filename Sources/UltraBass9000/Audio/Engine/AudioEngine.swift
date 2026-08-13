@@ -699,6 +699,7 @@ final class AudioEngine {
         static let processing = "deviceProcessing"
         static let delays = "deviceDelays"
         static let syncEnabled = "syncEnabled"
+        static let responses = "measuredResponses"
     }
 
     /// Suppresses writes while `restore()` is assigning to observed properties.
@@ -736,6 +737,11 @@ final class AudioEngine {
             defaults.set(encoded, forKey: Key.delays)
         }
         defaults.set(syncEnabled, forKey: Key.syncEnabled)
+        // Measured curves outlive the session that produced them. Re-running auto-sync costs
+        // sixteen seconds of sitting still, which is not a reasonable price for quitting the app.
+        if let encoded = try? JSONEncoder().encode(measuredResponses) {
+            defaults.set(encoded, forKey: Key.responses)
+        }
     }
 
     private func restore() {
@@ -759,6 +765,10 @@ final class AudioEngine {
         if let data = defaults.data(forKey: Key.delays),
            let decoded = try? JSONDecoder().decode([String: DeviceDelay].self, from: data) {
             deviceDelays = decoded
+        }
+        if let data = defaults.data(forKey: Key.responses),
+           let decoded = try? JSONDecoder().decode([String: [ResponsePoint]].self, from: data) {
+            measuredResponses = decoded
         }
         syncEnabled = defaults.object(forKey: Key.syncEnabled) == nil
             ? true
