@@ -22,6 +22,9 @@ final class AcousticCalibrator {
         let relativeLatencySeconds: Double
         /// Delay to apply so this device lines up with the slowest one.
         let delaySeconds: Double
+        /// What this device and the room did to the sweep, relative to the other devices measured
+        /// in the same pass. Empty when the sweep was not heard well enough to mean anything.
+        let response: [ResponsePoint]
         var succeeded: Bool { confidence >= SyncSignal.confidenceThreshold }
     }
 
@@ -264,6 +267,7 @@ final class AcousticCalibrator {
 
         var relativeLatencies: [Double?] = []
         var confidences: [Float] = []
+        var responses: [[ResponsePoint]] = []
 
         for segment in segments {
             let windowStart = Int(Double(segment.startFrame) * rateRatio)
@@ -271,6 +275,7 @@ final class AcousticCalibrator {
             guard windowStart >= 0, windowEnd - windowStart > reference.count else {
                 relativeLatencies.append(nil)
                 confidences.append(0)
+                responses.append([])
                 continue
             }
 
@@ -278,6 +283,7 @@ final class AcousticCalibrator {
             guard let detection = SyncSignal.findOffset(reference: reference, in: window) else {
                 relativeLatencies.append(nil)
                 confidences.append(0)
+                responses.append([])
                 continue
             }
 
@@ -288,6 +294,25 @@ final class AcousticCalibrator {
                                                             playbackSampleRate: playbackSampleRate)
             relativeLatencies.append(latency)
             confidences.append(detection.confidence)
+
+            // Frequency response, measured from the same capture, starting at the arrival that was
+            // just located. A tail beyond the sweep length is included deliberately: the room's
+            // decay is part of what reaches the listener and part of what the curve should show.
+            if detection.confidence >= SyncSignal.confidenceThreshold {
+                let tail = Int(0.15 * captureSampleRate)
+                let responseStart = arrivalFrames
+                let responseEnd = min(capture.count, responseStart + reference.count + tail)
+                if responseEnd > responseStart {
+                    responses.append(ResponseAnalyzer.response(
+                        recorded: Array(capture[responseStart..<responseEnd]),
+                        reference: reference,
+                        sampleRate: captureSampleRate))
+                } else {
+                    responses.append([])
+                }
+            } else {
+                responses.append([])
+            }
         }
 
         // Only trusted measurements take part in the alignment. A device that was not heard must
@@ -315,7 +340,8 @@ final class AcousticCalibrator {
                                             deviceName: device.name,
                                             confidence: confidences[index],
                                             relativeLatencySeconds: relativeLatencies[index] ?? 0,
-                                            delaySeconds: delayByIndex[index] ?? 0))
+                                            delaySeconds: delayByIndex[index] ?? 0,
+                                            response: responses[index]))
         }
 
         let spread = (trustedLatencies.max() ?? 0) - (trustedLatencies.min() ?? 0)

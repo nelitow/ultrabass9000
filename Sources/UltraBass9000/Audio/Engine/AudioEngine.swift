@@ -62,10 +62,8 @@ enum CalibrationState: Equatable {
 
 /// Non-fatal conditions worth surfacing rather than logging into the void.
 enum EngineDiagnostic: Equatable, Identifiable {
-    /// The tap has produced nothing but digital silence for long enough that a denied
-    /// audio-capture permission is the likeliest explanation. Core Audio offers no way to ask.
-    /// Advisory, not a fault: nothing has been captured *yet*. Offered once, and only until the
-    /// tap delivers its first sample.
+    /// Advisory, not a fault: nothing has been captured *yet*. Offered once, and only while the tap
+    /// has never delivered a sample, since the first one proves capture permission for good.
     case noAudioYet
     case noOutputsSelected
     case deviceDisappeared(String)
@@ -97,7 +95,7 @@ enum EngineDiagnostic: Equatable, Identifiable {
     var detail: String {
         switch self {
         case .noAudioYet:
-            return "Play something to check the routing. If the meters stay flat while audio is playing, UltraBass 9000 may not be allowed to record audio — check System Settings › Privacy & Security."
+            return "Play something to check the routing. If the meters stay flat while audio is playing, UltraBass 9000 may not be allowed to record audio. Check System Settings › Privacy & Security."
         case .noOutputsSelected:
             return "Choose the devices you want to play to in the sidebar."
         case .deviceDisappeared(let name):
@@ -145,6 +143,18 @@ final class AudioEngine {
 
     /// Per-device envelope history, oldest first. Republished at meter rate.
     private(set) var waveforms: [String: [WaveformSample]] = [:]
+
+    /// Frequency response measured at the listening position by the last auto-sync, per device.
+    ///
+    /// Comparable between devices, not meaningful in absolute terms: the built-in microphone has a
+    /// response of its own, and below roughly 300 Hz a single position measures the room as much as
+    /// the speaker. What it answers reliably is which device produces what, and where two of them
+    /// should hand over.
+    private(set) var measuredResponses: [String: [ResponsePoint]] = [:]
+
+    func measuredResponse(for uid: String) -> [ResponsePoint] { measuredResponses[uid] ?? [] }
+
+    var hasMeasuredResponses: Bool { measuredResponses.values.contains { !$0.isEmpty } }
 
     var activeDevices: [AudioDevice] {
         selectedOutputUIDs.compactMap { registry.device(uid: $0) }
@@ -403,6 +413,10 @@ final class AudioEngine {
         // undo a manual offset the user dialled in precisely because it cannot be measured.
         applyDelays()
         persist()
+
+        for measurement in outcome.measurements where !measurement.response.isEmpty {
+            measuredResponses[measurement.uid] = measurement.response
+        }
 
         let results = outcome.measurements.map { measurement in
             CalibrationResult(uid: measurement.uid,

@@ -25,6 +25,7 @@
   <span class="logo">ULTRABASS<span class="logo__dot">·</span>9000</span>
   <nav class="site-nav" aria-label="Primary">
     <div class="site-nav__links">
+      <a class="navlink" href="#build">Build</a>
       <a class="navlink" href="#features">Features</a>
       <a class="navlink" href="#how-it-works">How it works</a>
       <a class="navlink" href="#screenshots">Screenshots</a>
@@ -49,17 +50,10 @@
           installer.
         </p>
         <div class="hero__ctas">
-          <a class="btn btn--primary btn--lg" href="https://github.com/nelitow/ultrabass9000/releases/latest">Download for macOS</a>
-          <a class="btn btn--ghost btn--lg" href="https://github.com/nelitow/ultrabass9000">View source</a>
+          <a class="btn btn--primary btn--lg" href="#build">Build from source</a>
+          <a class="btn btn--ghost btn--lg" href="https://github.com/nelitow/ultrabass9000">View on GitHub</a>
         </div>
-        <div class="gatekeeper-note">
-          <span class="gatekeeper-note__mark">First launch</span>
-          <p>
-            Builds are unsigned and not notarized. The first time you open the app, right‑click it and
-            choose <code>Open</code> — after that it launches normally, no extra steps.
-          </p>
-        </div>
-        <p class="hero__meta">Requires macOS 26 or later.</p>
+        <p class="hero__meta">Requires macOS 26 or later, Xcode 26.x, and XcodeGen.</p>
       </div>
 
       <div class="card glow hero-visual" aria-hidden="true">
@@ -79,6 +73,43 @@
         <div class="hero-visual__foot">
           <span>Delay <strong>·</strong> EQ <strong>·</strong> filters <strong>·</strong> meter</span>
           <span>per output</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="build">
+    <div class="wrap">
+      <div class="section-label">
+        <span class="section-label__text">Build from source</span>
+        <span class="section-label__rule"></span>
+        <span class="section-label__meta">a couple of minutes, no Apple Developer account needed</span>
+      </div>
+      <div class="build__grid">
+        <div>
+          <div class="code-block">
+            <div class="code-block__head">
+              <span class="code-block__label">Terminal</span>
+              <button class="code-copy" type="button" data-copy-target="build-commands">Copy</button>
+            </div>
+            <pre class="code-block__body"><code id="build-commands">git clone https://github.com/nelitow/ultrabass9000.git
+cd ultrabass9000
+brew install xcodegen
+xcodegen generate
+open UltraBass9000.xcodeproj</code></pre>
+          </div>
+          <p class="build__then">Then press <kbd class="kbd">⌘R</kbd> in Xcode to build, sign, and run it.</p>
+          <p class="hero__meta">Requires macOS 26 or later, Xcode 26.x, and XcodeGen.</p>
+        </div>
+        <div class="note-card">
+          <span class="note-card__mark">Why no download</span>
+          <p>
+            There's no downloadable build yet, and that's deliberate: macOS only grants the microphone
+            permission this app needs to properly signed apps. An unsigned download would open normally
+            and capture nothing — worse than not shipping one at all. Signed releases need an Apple
+            Developer ID; until then, building it yourself is the way. Xcode signs the app with your own
+            developer identity automatically, so permissions work exactly as they should.
+          </p>
         </div>
       </div>
     </div>
@@ -131,9 +162,10 @@
             <h3>Acoustic auto-sync</h3>
             <p>
               Plays a sweep from each device in turn, listens back on the built-in microphone, and computes
-              the alignment automatically. Measured <span class="stat">repeatability on real hardware:
-              ~0.2&nbsp;ms</span>.
+              the alignment automatically. Measured repeatability on real hardware:
+              <span class="stat">~0.2&nbsp;ms</span>.
             </p>
+            <a class="src-link" href="https://github.com/nelitow/ultrabass9000/blob/8d1de383d31eeab65042bbe2b678ddecccab08c5/Sources/UltraBass9000/Audio/Calibration/AcousticCalibrator.swift#L100">AcousticCalibrator.swift:100 ↗</a>
           </div>
         </div>
 
@@ -165,6 +197,7 @@
             app, using a macOS process tap. Nothing is muted or interrupted — every app keeps playing
             normally.
           </p>
+          <a class="src-link" href="https://github.com/nelitow/ultrabass9000/blob/8d1de383d31eeab65042bbe2b678ddecccab08c5/Sources/UltraBass9000/Audio/Capture/ProcessTap.swift#L28">ProcessTap.swift:28 ↗</a>
         </div>
         <div class="step">
           <div class="step__index">02</div>
@@ -181,6 +214,7 @@
             Each output gets its own path — delay, then EQ, then filters — before the sound reaches that
             speaker, so every device can be tuned on purpose instead of playing an identical signal.
           </p>
+          <a class="src-link" href="https://github.com/nelitow/ultrabass9000/blob/8d1de383d31eeab65042bbe2b678ddecccab08c5/Sources/UltraBass9000/Audio/Render/AggregateOutput.swift#L207">AggregateOutput.swift:207 ↗</a>
         </div>
       </div>
     </div>
@@ -204,11 +238,11 @@
         </figure>
         <figure class="shot-frame-wrap">
           <div class="shot-frame">
-            <img src="assets/screenshot-eq.png" width="1760" height="1200" loading="lazy" alt="UltraBass 9000 EQ view showing two devices with different filter curves — a high-pass curve on one output and a low-pass curve on the other.">
+            <img src="assets/screenshot-eq.png" width="1760" height="1200" loading="lazy" alt="UltraBass 9000 EQ view showing two devices with different response curves — a high-pass filter on one output and a low-pass filter on the other, each in series with that device's EQ.">
           </div>
           <figcaption class="shot-caption">
-            Independent EQ per device, shaped by dragging the curve directly — high-pass on one output,
-            low-pass on the other.
+            Each device's own response curve — EQ in series with a filter, drawn live — with a
+            high-pass on one output and a low-pass on the other.
           </figcaption>
         </figure>
       </div>
@@ -219,11 +253,11 @@
     <div class="wrap cta-band__inner">
       <div>
         <h2>Free, open source, macOS 26+</h2>
-        <p>Unsigned build — right-click, Open, on first launch.</p>
+        <p>No binary yet — clone it, generate the Xcode project, and run it.</p>
       </div>
       <div class="cta-band__actions">
-        <a class="btn btn--primary" href="https://github.com/nelitow/ultrabass9000/releases/latest">Download for macOS</a>
-        <a class="btn" href="https://github.com/nelitow/ultrabass9000">View source</a>
+        <a class="btn btn--primary" href="#build">Build from source</a>
+        <a class="btn" href="https://github.com/nelitow/ultrabass9000">View on GitHub</a>
       </div>
     </div>
   </section>
@@ -239,7 +273,7 @@
       </div>
       <div class="site-footer__links">
         <a class="footlink" href="https://github.com/nelitow/ultrabass9000">Source code ↗</a>
-        <a class="footlink" href="https://github.com/nelitow/ultrabass9000/releases/latest">Releases ↗</a>
+        <a class="footlink" href="#build">Build from source</a>
       </div>
     </div>
     <div class="site-footer__credit">
@@ -249,5 +283,6 @@
 </footer>
 
 <script src="js/theme.js"></script>
+<script src="js/build.js"></script>
 </body>
 </html>

@@ -77,18 +77,18 @@ struct CalibrationFlowView: View {
             )
             explanationRow(
                 icon: "figure.stand",
-                text: "Sit at your normal listening position and keep the room quiet — background"
-                    + " noise and movement will throw off the measurement."
+                text: "Sit where you normally listen and keep the room quiet. Background noise"
+                    + " and movement will throw the measurement off."
             )
             explanationRow(
                 icon: "mic.fill",
-                text: "The microphone's position becomes the sweet spot: alignment is computed for"
-                    + " wherever this Mac is sitting right now."
+                text: "Alignment is computed for wherever this Mac is sitting, so the microphone's"
+                    + " position becomes the sweet spot."
             )
             explanationRow(
                 icon: "exclamationmark.triangle.fill",
-                text: "Headphones and earbuds can't be measured this way — the microphone can't hear"
-                    + " them. They'll be skipped and need a manual offset.",
+                text: "Headphones and earbuds cannot be measured this way. The microphone cannot"
+                    + " hear them, so they get skipped and need a manual offset.",
                 tint: DesignSystem.Colors.warning
             )
         }
@@ -118,7 +118,7 @@ struct CalibrationFlowView: View {
 
     private func measuringContent(deviceName: String, index: Int, total: Int) -> some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
-            stageStatus(title: "Measuring \(deviceName)", detail: "Device \(index) of \(total) \u{00B7} stay quiet and still")
+            stageStatus(title: "Measuring \(deviceName)", detail: "Device \(index) of \(total). Stay quiet and still.")
             // `index` is 1-based and counts the device currently playing, so the bar reaches full
             // only while the *last* device's sweep is in flight, not once it's actually done —
             // acceptable imprecision for a few-second, few-device measurement.
@@ -158,7 +158,7 @@ struct CalibrationFlowView: View {
 
             Text(measured.count > 1
                  ? "Corrected a \(DesignSystem.Delay.formattedMilliseconds(spreadMilliseconds)) spread between the earliest and latest arrival."
-                 : "Nothing to correct — only one output could be measured.")
+                 : "Nothing to correct. Only one output could be measured.")
                 .font(.callout)
                 .foregroundStyle(DesignSystem.Colors.textSecondary)
 
@@ -197,10 +197,9 @@ struct CalibrationFlowView: View {
                     Text("SET THESE MANUALLY")
                         .font(DesignSystem.Typography.sectionHeader)
                         .foregroundStyle(DesignSystem.Colors.warning)
-                    Text("\(skipped.map(\.deviceName).joined(separator: ", ")) — the microphone could not hear "
-                         + (skipped.count == 1 ? "it" : "them") + ". "
-                         + "Headphones and earbuds never can be; a device with nothing plugged into it will not be either. "
-                         + "Any existing delay on \(skipped.count == 1 ? "it" : "them") was left untouched.")
+                    Text("The microphone could not hear \(skipped.map(\.deviceName).joined(separator: ", ")). "
+                         + "Headphones and earbuds never can be. Neither can a device with nothing plugged into it. "
+                         + "Any delay already set on \(skipped.count == 1 ? "it" : "them") was left alone.")
                         .font(.callout)
                         .foregroundStyle(DesignSystem.Colors.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)

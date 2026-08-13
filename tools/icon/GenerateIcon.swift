@@ -152,14 +152,23 @@ func drawSquircleBackground(in ctx: CGContext) {
 /// the background's clip has been released (`ctx.restoreGState()`) — a
 /// stroke drawn while still clipped to the same path only shows its inner
 /// half, at half the intended weight.
-func drawSquircleRim(in ctx: CGContext) {
+///
+/// `pixelSize` matters here in a way it doesn't for the glyph: the CTM is
+/// scaled by `pixelSize/1024` before this runs, so a line width specified in
+/// design-space units shrinks along with everything else — a 3pt design
+/// width is a full 3 device px at 1024 but only 0.047 device px at 16,
+/// effectively invisible. Floor the *device-pixel* width instead so the rim
+/// stays a real edge at every size, not just the largest one.
+func drawSquircleRim(in ctx: CGContext, pixelSize: Int) {
     let inset: CGFloat = 1.5
     let rect = Grid.squircleRect.insetBy(dx: inset, dy: inset)
     let radius = Grid.cornerRadius - inset
     let path = CGPath(roundedRect: rect, cornerWidth: radius, cornerHeight: radius, transform: nil)
     ctx.addPath(path)
     ctx.setStrokeColor(Palette.rim)
-    ctx.setLineWidth(3)
+    let minDevicePixels: CGFloat = 1.5
+    let designWidth = max(3, minDevicePixels * Grid.canvas / CGFloat(pixelSize))
+    ctx.setLineWidth(designWidth)
     ctx.strokePath()
 }
 
@@ -189,6 +198,17 @@ func drawSignalFanOut(in ctx: CGContext, tier: DetailTier) {
         let color: CGColor
     }
 
+    // Tried making every tier share these same 3 branches, so the glyph
+    // wouldn't change shape between icon_16.png (1x) and icon_32.png (2x)
+    // for the same logical 16pt slot. Rendered and compared both at true
+    // 16x16: 3 branches is legible but the amber middle node visibly
+    // blurs into its neighbors, reading as a smear rather than 3 dots.
+    // 2 branches (amber dropped) stayed crisp. Sharpest-at-16pt won over
+    // shape parity — see the header comment and the 16pt note in the
+    // generator's report for the resulting 1x/2x inconsistency this trades
+    // for. Only 16px (.tiny) uses 1x today; every other size in the
+    // catalog is a 2x or higher asset, so this exception is as narrow as
+    // it can be.
     let branches: [Branch]
     switch tier {
     case .full, .medium:
@@ -198,8 +218,6 @@ func drawSignalFanOut(in ctx: CGContext, tier: DetailTier) {
             Branch(yFraction: 0.30, color: Palette.meterRed),
         ]
     case .tiny:
-        // Amber dropped: at 16pt, green vs. red is the contrast that
-        // survives; a third mid-tone just muddies two pixels into three.
         branches = [
             Branch(yFraction: -0.34, color: Palette.meterGreen),
             Branch(yFraction: 0.34, color: Palette.meterRed),
@@ -285,7 +303,7 @@ func renderIcon(pixelSize: Int) -> CGImage {
     drawSignalFanOut(in: ctx, tier: .forPixelSize(pixelSize))
     ctx.restoreGState() // releases the squircle clip before the rim is stroked
 
-    drawSquircleRim(in: ctx)
+    drawSquircleRim(in: ctx, pixelSize: pixelSize)
 
     guard let image = ctx.makeImage() else {
         fatalError("Could not rasterize icon at \(pixelSize)px")

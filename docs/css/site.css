@@ -37,6 +37,22 @@ img {
   white-space: nowrap;
 }
 
+.visually-hidden:focus {
+  position: fixed;
+  top: var(--sp-3);
+  left: var(--sp-3);
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip: auto;
+  z-index: 50;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-1);
+  background: var(--surface-overlay);
+  color: var(--text-body);
+  box-shadow: var(--focus-ring);
+}
+
 :focus-visible {
   outline: none;
   box-shadow: var(--focus-ring);
@@ -330,19 +346,19 @@ section {
   margin-bottom: var(--sp-4);
 }
 
-.gatekeeper-note {
+/* quiet informational card — used for the "why no download" note */
+
+.note-card {
   display: flex;
   gap: var(--sp-3);
   align-items: flex-start;
-  max-width: 46ch;
-  margin-bottom: var(--sp-3);
-  padding: var(--sp-3) var(--sp-4);
+  padding: var(--sp-4);
   border: 1px solid var(--edge-1);
   border-radius: var(--r-2);
   background: var(--surface-panel);
 }
 
-.gatekeeper-note__mark {
+.note-card__mark {
   flex-shrink: 0;
   margin-top: 2px;
   font-family: var(--font-mono);
@@ -350,16 +366,17 @@ section {
   letter-spacing: var(--track-wide);
   text-transform: uppercase;
   color: var(--accent);
+  white-space: nowrap;
 }
 
-.gatekeeper-note p {
+.note-card p {
   margin: 0;
   font-size: var(--text-sm);
   line-height: var(--leading-body);
   color: var(--text-dim);
 }
 
-.gatekeeper-note code {
+.note-card code {
   font-family: var(--font-mono);
   font-size: 0.95em;
   color: var(--text-body);
@@ -403,6 +420,7 @@ section {
 .hero-visual__bars span {
   flex: 1;
   min-width: 3px;
+  height: 100%;
   border-radius: 3px 3px 0 0;
   background: linear-gradient(180deg, var(--accent), var(--accent-2));
   opacity: 0.85;
@@ -508,6 +526,10 @@ section {
 
 @media (max-width: 899px) {
   .shots-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+.shot-frame-wrap {
+  margin: 0;
 }
 
 .shot-frame {
