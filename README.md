@@ -6,9 +6,9 @@ independent volume, EQ, filtering, delay and metering **per device**.
 macOS's built-in Multi-Output Device can do exactly one of those things — play to more than one
 device — and even then the volume keys stop working. This fixes that.
 
-> Status: **Phase 1 complete** — system audio is captured and fanned out to multiple devices with
-> independent per-device gain, mute and metering, verified on real hardware. EQ, filters, delay and
-> waveforms are next. See [ROADMAP.md](ROADMAP.md).
+> Status: **Phase 2 complete** — system audio is captured and fanned out to multiple devices, each
+> with its own 5-band EQ, high/low/band-pass filters, gain, mute, metering and waveform. Verified on
+> real hardware. Delay synchronisation is next. See [ROADMAP.md](ROADMAP.md).
 
 ## Build and run
 
@@ -90,7 +90,8 @@ enabling it there makes the HAL add or drop a sample every fraction of a second,
 | Path | What lives there |
 |---|---|
 | `Sources/UltraBass9000/Audio/Capture/` | Process tap creation and teardown |
-| `Sources/UltraBass9000/Audio/Render/` | Aggregate planning, aggregate device, the real-time render callback |
+| `Sources/UltraBass9000/Audio/DSP/` | Biquad design (RBJ cookbook) and the per-device processing model |
+| `Sources/UltraBass9000/Audio/Render/` | Aggregate planning, aggregate device, filter bank, waveform rings, the real-time render callback |
 | `Sources/UltraBass9000/Audio/Engine/` | `AudioEngine` — the orchestrator the UI binds to |
 | `Sources/UltraBass9000/Audio/Support/` | Core Audio property helpers, device model, device registry |
 | `Sources/UltraBass9000/Views/` | SwiftUI mixer |
@@ -102,6 +103,12 @@ enabling it there makes the HAL add or drop a sample every fraction of a second,
 allocate, lock, log, send Objective-C messages, or read a `weak` reference (weak reads take a global
 runtime lock). All shared state lives in `RenderControlBlock` as naturally-aligned plain memory.
 Lifetime is guaranteed by teardown order rather than by reference counting.
+
+**Filter coefficients are double-buffered.** The UI writes the bank the render thread is not using
+and publishes it with one 32-bit store; the render thread reads that index once per callback. A
+half-applied update would mix five coefficients from two different filter designs, and the result is
+frequently unstable — an unstable biquad is a full-scale squeal, not a subtle artefact.
+`BiquadDesign` also refuses to emit anything non-finite or unstable, falling back to pass-through.
 
 **Teardown order is not negotiable:** `AudioDeviceStop` → `AudioDeviceDestroyIOProcID` →
 `AudioHardwareDestroyAggregateDevice` → `AudioHardwareDestroyProcessTap`. The aggregate references

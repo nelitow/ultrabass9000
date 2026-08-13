@@ -2,7 +2,8 @@ import SwiftUI
 
 /// One mixer channel for an active output device: identity header, an
 /// optional CLOCK badge, a vertical fader + meter, a numeric dB readout,
-/// mute, and a dimmed Phase 2 placeholder stack (EQ / Filters / Delay).
+/// mute, a live waveform preview, and an EQ thumbnail + filter summary that
+/// opens the full `EQEditor` / `FilterControls` in a sheet.
 struct DeviceStrip: View {
     @Environment(AudioEngine.self) private var engine
 
@@ -10,13 +11,15 @@ struct DeviceStrip: View {
     /// True when this device is `activeDevices[0]` — the clock source.
     let isClock: Bool
 
+    @State private var isProcessingSheetPresented = false
+
     var body: some View {
         VStack(spacing: DesignSystem.Spacing.sm) {
             header
             faderSection
             controlsRow
             Divider()
-            phase2Placeholder
+            processingSection
         }
         .padding(DesignSystem.Spacing.sm)
         .frame(width: DesignSystem.Metrics.stripWidth)
@@ -86,39 +89,122 @@ struct DeviceStrip: View {
         }
     }
 
-    // MARK: - Phase 2 placeholder
+    // MARK: - Processing (waveform / EQ / filters)
 
-    private var phase2Placeholder: some View {
+    private var processingSection: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
-            phase2Row(title: "EQ", systemImage: "slider.horizontal.3")
-            phase2Row(title: "Filters", systemImage: "waveform.badge.minus")
-            phase2Row(title: "Delay", systemImage: "timer")
+            StripWaveform(uid: device.uid)
+                .frame(height: DesignSystem.Metrics.waveformHeight)
+
+            Button {
+                isProcessingSheetPresented = true
+            } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: DesignSystem.Spacing.xxs) {
+                        Image(systemName: "slider.horizontal.3")
+                        Text("EQ")
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.forward")
+                            .font(.system(size: 8, weight: .semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .font(DesignSystem.Typography.readout)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
+
+                    StripEQThumbnail(uid: device.uid)
+                        .frame(height: DesignSystem.Metrics.eqThumbnailHeight)
+
+                    filterSummary
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
         .padding(DesignSystem.Spacing.xs)
         .frame(maxWidth: .infinity, alignment: .leading)
         .materialPanel(cornerRadius: DesignSystem.Metrics.smallCornerRadius)
-        .overlay(alignment: .topTrailing) {
-            Text("PHASE 2")
-                .font(.system(size: 7, weight: .bold, design: .rounded))
-                .padding(.horizontal, 4)
-                .padding(.vertical, 2)
-                .foregroundStyle(DesignSystem.Colors.textSecondary)
-                .background(.secondary.opacity(0.25), in: Capsule())
-                .padding(4)
+        .sheet(isPresented: $isProcessingSheetPresented) {
+            DeviceProcessingSheet(device: device)
         }
-        .opacity(0.55)
-        .disabled(true)
-        .accessibilityHidden(true)
     }
 
-    private func phase2Row(title: String, systemImage: String) -> some View {
-        HStack(spacing: DesignSystem.Spacing.xxs) {
-            Image(systemName: systemImage)
-            Text(title)
-            Spacer(minLength: 0)
+    /// Read-only "which filters are on" line — editing them happens in the
+    /// sheet opened by tapping the EQ thumbnail above, alongside `EQEditor`.
+    private var filterSummary: some View {
+        let processing = engine.processing(for: device.uid)
+        let active = [
+            processing.highPass.isEnabled ? "HP" : nil,
+            processing.lowPass.isEnabled ? "LP" : nil,
+            processing.bandPass.isEnabled ? "BP" : nil,
+        ].compactMap { $0 }
+
+        return Text(active.isEmpty ? "No filters" : active.joined(separator: " \u{00B7} "))
+            .font(.system(size: 9, design: .monospaced))
+            .foregroundStyle(DesignSystem.Colors.textSecondary)
+            .lineLimit(1)
+    }
+}
+
+/// Isolates the ~30 Hz `waveform(for:)` poll to a leaf view, same rationale
+/// as `StripLevelMeter`: keep that redraw cadence from invalidating the rest
+/// of the strip.
+private struct StripWaveform: View {
+    @Environment(AudioEngine.self) private var engine
+    let uid: String
+
+    var body: some View {
+        WaveformView(samples: engine.waveform(for: uid))
+    }
+}
+
+/// Miniature, non-interactive magnitude-response preview. Uses far fewer
+/// sample points than the full `EQEditor` plot since it only needs to read
+/// as a glanceable shape, not resolve individual band positions.
+private struct StripEQThumbnail: View {
+    @Environment(AudioEngine.self) private var engine
+    let uid: String
+
+    private static let sampleFrequencies = EQFrequencyScale.logSpaced(count: 48)
+
+    var body: some View {
+        Canvas { context, size in
+            let magnitudes = engine.magnitudeResponse(for: uid, at: Self.sampleFrequencies)
+            let curve = EQCurveGeometry.paths(magnitudes: magnitudes, size: size)
+            context.fill(curve.fill, with: .color(DesignSystem.Colors.accent.opacity(0.3)))
+            context.stroke(curve.stroke, with: .color(DesignSystem.Colors.accent), lineWidth: 1)
         }
-        .font(DesignSystem.Typography.readout)
-        .foregroundStyle(DesignSystem.Colors.textSecondary)
+        .background(DesignSystem.Colors.strip.opacity(0.5), in: RoundedRectangle(cornerRadius: 3))
+        .accessibilityHidden(true)
+    }
+}
+
+/// Sheet content presented from a strip's EQ thumbnail: the full `EQEditor`
+/// plus `FilterControls` for the same device, with sheet chrome (dismiss,
+/// whole-device reset) owned here rather than by either child view.
+private struct DeviceProcessingSheet: View {
+    @Environment(AudioEngine.self) private var engine
+    @Environment(\.dismiss) private var dismiss
+    let device: AudioDevice
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.lg) {
+            EQEditor(device: device)
+            Divider()
+            FilterControls(device: device)
+            Spacer(minLength: 0)
+            HStack {
+                Button("Reset Device") {
+                    engine.resetProcessing(for: device.uid)
+                }
+                .buttonStyle(.bordered)
+                Spacer()
+                Button("Done") { dismiss() }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(DesignSystem.Spacing.lg)
+        .frame(minWidth: 560, idealWidth: 620, minHeight: 640, idealHeight: 720)
     }
 }
 

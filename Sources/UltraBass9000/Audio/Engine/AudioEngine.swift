@@ -90,6 +90,9 @@ final class AudioEngine {
     /// Republished at meter rate so views observing it redraw.
     private(set) var peakLevels: [String: Float] = [:]
 
+    /// Per-device envelope history, oldest first. Republished at meter rate.
+    private(set) var waveforms: [String: [WaveformSample]] = [:]
+
     var activeDevices: [AudioDevice] {
         selectedOutputUIDs.compactMap { registry.device(uid: $0) }
     }
@@ -104,8 +107,10 @@ final class AudioEngine {
     nonisolated(unsafe) private var meterTimer: Timer?
     private var deviceGains: [String: Float] = [:]
     private var deviceMutes: [String: Bool] = [:]
+    private var deviceProcessing: [String: DeviceProcessing] = [:]
     private var sampleRate: Double = 48_000
     private var layoutVerified = false
+    private var meterLogTicks = 0
 
     private let logger = Logger(subsystem: "com.nelitojr.UltraBass9000", category: "AudioEngine")
     private let defaults = UserDefaults.standard
@@ -183,6 +188,48 @@ final class AudioEngine {
     }
 
     func peak(for uid: String) -> Float { peakLevels[uid] ?? 0 }
+
+    func waveform(for uid: String) -> [WaveformSample] { waveforms[uid] ?? [] }
+
+    // MARK: - EQ and filters
+
+    func processing(for uid: String) -> DeviceProcessing {
+        deviceProcessing[uid] ?? .neutral
+    }
+
+    func setProcessing(_ processing: DeviceProcessing, for uid: String) {
+        deviceProcessing[uid] = processing.normalised
+        publishFilters()
+        persist()
+    }
+
+    func resetProcessing(for uid: String) {
+        deviceProcessing[uid] = .neutral
+        publishFilters()
+        persist()
+    }
+
+    /// Combined dB response of the device's whole chain, for drawing the curve.
+    ///
+    /// Computed from the same `DeviceProcessing` the render thread is running, at the same sample
+    /// rate, so what is drawn is what is heard rather than an idealised approximation.
+    func magnitudeResponse(for uid: String, at frequencies: [Double]) -> [Double] {
+        processing(for: uid).magnitudeResponse(at: frequencies, sampleRate: sampleRate)
+    }
+
+    /// Compiles every active device's chain and hands the whole set to the render thread at once.
+    private func publishFilters() {
+        guard let plan else { return }
+        let chains = plan.subDevices.map { subDevice in
+            processing(for: subDevice.uid).compile(sampleRate: sampleRate)
+        }
+        control.filters.publish(chains)
+        publishedSectionCounts = chains.map(\.count)
+    }
+
+    /// Sections compiled per device at the last publish. Logged at activation and useful when a
+    /// filter appears to do nothing — an empty chain means the settings never reached the engine.
+    private(set) var publishedSectionCounts: [Int] = []
 
     // MARK: - Lifecycle
 
@@ -263,7 +310,8 @@ final class AudioEngine {
         logger.info("""
             Engine running: \(plan.subDevices.count, privacy: .public) sub-devices, \
             \(plan.totalOutputStreams, privacy: .public) output streams, \
-            sampleRate=\(self.sampleRate, privacy: .public)
+            sampleRate=\(self.sampleRate, privacy: .public), \
+            filterSections=\(self.publishedSectionCounts, privacy: .public)
             """)
     }
 
@@ -281,6 +329,7 @@ final class AudioEngine {
             control.setGain(deviceGains[subDevice.uid] ?? 1, deviceIndex: index)
             control.setMuted(deviceMutes[subDevice.uid] ?? false, deviceIndex: index)
         }
+        publishFilters()
     }
 
     private func deviceIndex(for uid: String) -> Int? {
@@ -300,19 +349,40 @@ final class AudioEngine {
     private func tickMeters() {
         guard let plan, status == .running else {
             if !peakLevels.isEmpty { peakLevels = [:] }
+            if !waveforms.isEmpty { waveforms = [:] }
             return
         }
         var levels: [String: Float] = [:]
+        var envelopes: [String: [WaveformSample]] = [:]
         levels.reserveCapacity(plan.subDevices.count)
+        envelopes.reserveCapacity(plan.subDevices.count)
         for (index, subDevice) in plan.subDevices.enumerated() where index < RenderControlBlock.maxDevices {
             levels[subDevice.uid] = control.peak(deviceIndex: index)
+            envelopes[subDevice.uid] = control.waveforms.snapshot(deviceIndex: index)
         }
         peakLevels = levels
+        waveforms = envelopes
+        logMetersIfRequested(plan: plan)
         // Decay after sampling so a transient still shows for at least one frame.
         control.decayPeaks(by: 0.72)
 
         verifyBufferLayout(against: plan)
         checkForSilentTap()
+    }
+
+    /// Development affordance: `-UB9KLogMeters YES` prints the running peak per device once a
+    /// second. Comparing two devices' levels is how per-device processing gets verified from a
+    /// script, since the on-screen meters decay faster than a screenshot can catch them.
+    private func logMetersIfRequested(plan: AggregatePlan) {
+        guard defaults.bool(forKey: "UB9KLogMeters") else { return }
+        meterLogTicks += 1
+        guard meterLogTicks % 30 == 0 else { return }
+        let summary = plan.subDevices.enumerated().map { index, subDevice in
+            let peak = control.peak(deviceIndex: index)
+            let db = peak > 0.00001 ? 20 * log10(peak) : -100
+            return String(format: "%@=%.1fdB", subDevice.uid.prefix(24).description, db)
+        }
+        logger.info("Meters: \(summary.joined(separator: "  "), privacy: .public)")
     }
 
     /// Confirms the HAL laid the aggregate out the way the plan assumed.
@@ -364,17 +434,33 @@ final class AudioEngine {
         static let mutes = "deviceMutes"
         static let masterGain = "masterGain"
         static let masterMuted = "masterMuted"
+        static let processing = "deviceProcessing"
     }
 
+    /// Suppresses writes while `restore()` is assigning to observed properties.
+    ///
+    /// Without this, the first assignment in `restore()` fires `didSet` → `persist()`, which writes
+    /// the still-empty gains, mutes and EQ back over the saved values — so everything loaded after
+    /// that first line reads what we just clobbered. Settings appeared to save and then silently
+    /// reset on every launch.
+    private var isRestoring = false
+
     private func persist() {
+        guard !isRestoring else { return }
         defaults.set(selectedOutputUIDs, forKey: Key.selection)
         defaults.set(deviceGains, forKey: Key.gains)
         defaults.set(deviceMutes, forKey: Key.mutes)
         defaults.set(masterGain, forKey: Key.masterGain)
         defaults.set(isMasterMuted, forKey: Key.masterMuted)
+        if let encoded = try? JSONEncoder().encode(deviceProcessing) {
+            defaults.set(encoded, forKey: Key.processing)
+        }
     }
 
     private func restore() {
+        isRestoring = true
+        defer { isRestoring = false }
+
         selectedOutputUIDs = defaults.stringArray(forKey: Key.selection) ?? []
         deviceGains = (defaults.dictionary(forKey: Key.gains) as? [String: Float]) ?? [:]
         deviceMutes = (defaults.dictionary(forKey: Key.mutes) as? [String: Bool]) ?? [:]
@@ -382,5 +468,12 @@ final class AudioEngine {
             masterGain = defaults.float(forKey: Key.masterGain)
         }
         isMasterMuted = defaults.bool(forKey: Key.masterMuted)
+
+        // `normalised` repairs anything an older build wrote — a shorter band array, a stale slot
+        // index — rather than discarding the user's settings on a schema change.
+        if let data = defaults.data(forKey: Key.processing),
+           let decoded = try? JSONDecoder().decode([String: DeviceProcessing].self, from: data) {
+            deviceProcessing = decoded.mapValues(\.normalised)
+        }
     }
 }

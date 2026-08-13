@@ -31,6 +31,11 @@ enum DesignSystem {
         static let meterGreen = Color(red: 0.20, green: 0.85, blue: 0.45)
         static let meterAmber = Color(red: 0.98, green: 0.75, blue: 0.15)
         static let meterRed = Color(red: 0.95, green: 0.25, blue: 0.25)
+
+        // Waveform envelope tint, kept distinct from `accent` so the
+        // always-on strip preview doesn't visually compete with the fader
+        // and interactive EQ/filter controls, which all use `accent`.
+        static let waveform = Color(red: 0.35, green: 0.68, blue: 0.95)
     }
 
     // MARK: - Metrics
@@ -42,6 +47,11 @@ enum DesignSystem {
         static let cornerRadius: CGFloat = 16
         static let smallCornerRadius: CGFloat = 8
         static let hairlineWidth: CGFloat = 1
+
+        /// Height of the always-visible `WaveformView` embedded in a strip.
+        static let waveformHeight: CGFloat = 34
+        /// Height of the non-interactive EQ curve preview embedded in a strip.
+        static let eqThumbnailHeight: CGFloat = 40
     }
 
     enum Spacing {

@@ -253,6 +253,14 @@ extension AggregateOutput {
         let masterGain = control.masterMuted.pointee == 1 ? 0 : control.masterGain.pointee
         let mappedBuffers = Int(control.bufferCount.pointee)
 
+        // Read the coefficient bank exactly once for the whole callback. Re-reading per device
+        // could straddle a publish and mix two generations of filter design together.
+        let filters = control.filters
+        let bank = Int(filters.activeBank.pointee) & 1
+        let coefficients = filters.coefficients
+        let filterState = filters.state
+        let waveforms = control.waveforms
+
         for bufferIndex in 0..<outputBuffers.count {
             let buffer = outputBuffers[bufferIndex]
             guard let outputData = buffer.mData, buffer.mNumberChannels > 0 else { continue }
@@ -272,14 +280,33 @@ extension AggregateOutput {
             let deviceMuted = control.mutes[deviceIndex] == 1
             let gain = deviceMuted ? 0 : masterGain * control.gains[deviceIndex]
 
+            let sectionCount = Int(filters.sectionCounts[bank * FilterBank.maxDevices + deviceIndex])
+            let coefficientBase = FilterBank.coefficientOffset(bank: bank, device: deviceIndex, section: 0)
+            let stateBase = FilterBank.stateOffset(device: deviceIndex, section: 0, channel: 0)
+
             let frames = min(tapFrames, outputFrames)
             var devicePeak: Float = 0
 
             for frame in 0..<frames {
                 let outBase = frame * outputChannels
                 let inBase = frame * tapChannels
-                let left = tapSamples[inBase] * gain
-                let right = tapChannels > 1 ? tapSamples[inBase + 1] * gain : left
+
+                // A vanishingly small offset keeps the filter state out of denormal range. Denormal
+                // arithmetic can cost tens of times a normal multiply, which on a real-time thread
+                // shows up as dropouts rather than as slowness.
+                var left = tapSamples[inBase] + 1e-20
+                var right = tapChannels > 1 ? tapSamples[inBase + 1] + 1e-20 : left
+
+                FilterBank.processFrame(left: &left,
+                                        right: &right,
+                                        coefficients: coefficients,
+                                        state: filterState,
+                                        coefficientBase: coefficientBase,
+                                        stateBase: stateBase,
+                                        sectionCount: sectionCount)
+
+                left *= gain
+                right *= gain
 
                 // Zero the whole frame first so surplus channels on a multichannel interface stay
                 // quiet instead of repeating the stereo pair.
@@ -291,6 +318,7 @@ extension AggregateOutput {
 
                 let magnitude = max(abs(left), abs(right))
                 if magnitude > devicePeak { devicePeak = magnitude }
+                waveforms.accumulate((left + right) * 0.5, deviceIndex: deviceIndex)
             }
 
             // Any frames the tap could not fill are silence, not stale audio.

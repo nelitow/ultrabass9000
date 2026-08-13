@@ -50,6 +50,11 @@ final class RenderControlBlock {
     /// (one buffer holding every device's channels end to end).
     let observedOutputChannels: UnsafeMutablePointer<Int32>
 
+    /// Per-device biquad chains, double-buffered so a coefficient update is never seen half-applied.
+    let filters = FilterBank()
+    /// Per-device envelope history for the waveform displays.
+    let waveforms = WaveformRing()
+
     init() {
         masterGain = .allocate(capacity: 1)
         masterMuted = .allocate(capacity: 1)
@@ -110,6 +115,11 @@ final class RenderControlBlock {
         bufferCount.pointee = Int32(count)
         deviceCount.pointee = Int32(min(plan.subDevices.count, Self.maxDevices))
         silentInputFrames.pointee = 0
+
+        // Device slots are reassigned when the plan changes. Without clearing, a new device would
+        // start by playing out the filter memory and waveform history of whatever used to sit here.
+        filters.resetState()
+        waveforms.reset()
     }
 
     func setGain(_ gain: Float, deviceIndex: Int) {

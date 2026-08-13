@@ -139,7 +139,7 @@ Build the spine end to end with zero DSP, so every later phase is an insert, not
 
 **Done when:** one Spotify stream plays out of built-in speakers + a USB DAC at the same time.
 
-### Phase 2 — The easy wins, all four at once (4–6 days)
+### Phase 2 — The easy wins, all four at once ✅ done (2026-08-13)
 
 These are the same code shape: a per-device processor chain over a channel range.
 
