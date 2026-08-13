@@ -54,6 +54,10 @@ final class RenderControlBlock {
     let filters = FilterBank()
     /// Per-device envelope history for the waveform displays.
     let waveforms = WaveformRing()
+    /// Per-device delay lines used to align devices with different latencies.
+    let delays = DelayBank()
+    /// Scheduled test tones for acoustic alignment. Takes over the output while it runs.
+    let calibration = CalibrationPlayer()
 
     init() {
         masterGain = .allocate(capacity: 1)
@@ -120,6 +124,7 @@ final class RenderControlBlock {
         // start by playing out the filter memory and waveform history of whatever used to sit here.
         filters.resetState()
         waveforms.reset()
+        delays.reset()
     }
 
     func setGain(_ gain: Float, deviceIndex: Int) {

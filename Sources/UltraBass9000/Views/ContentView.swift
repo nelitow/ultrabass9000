@@ -10,6 +10,7 @@ struct ContentView: View {
     /// session. `AudioEngine.diagnostics` has no dismiss API, so banners
     /// are just filtered locally by id.
     @State private var dismissedDiagnosticIDs: Set<String> = []
+    @State private var isCalibrationSheetPresented = false
 
     private var visibleDiagnostics: [EngineDiagnostic] {
         engine.diagnostics.filter { !dismissedDiagnosticIDs.contains($0.id) }
@@ -40,11 +41,16 @@ struct ContentView: View {
                 statusPill
                 startStopButton
                 Spacer(minLength: DesignSystem.Spacing.lg)
+                syncControl
+                autoSyncButton
                 masterGainControl
             }
         }
         .padding(.horizontal, DesignSystem.Spacing.lg)
         .padding(.vertical, DesignSystem.Spacing.sm)
+        .sheet(isPresented: $isCalibrationSheetPresented) {
+            CalibrationSheet()
+        }
     }
 
     private var statusPill: some View {
@@ -101,6 +107,53 @@ struct ContentView: View {
             get: { Double(engine.masterGain) },
             set: { engine.masterGain = Float($0) }
         )
+    }
+
+    // MARK: - Sync
+
+    /// Master on/off plus the honest cost of being on: the largest delay currently applied, when
+    /// there is one. When sync is off that cost is zero by definition, so the pill switches to
+    /// saying so explicitly rather than just going quiet — the low-latency state should be as
+    /// visible as the latency cost is.
+    private var syncControl: some View {
+        HStack(spacing: DesignSystem.Spacing.sm) {
+            Image(systemName: engine.syncEnabled ? "arrow.triangle.branch" : "bolt.fill")
+                .foregroundStyle(engine.syncEnabled ? DesignSystem.Colors.textSecondary : DesignSystem.Colors.success)
+
+            Toggle("Sync", isOn: syncEnabledBinding)
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .labelsHidden()
+
+            if !engine.syncEnabled {
+                Text("Lowest Latency")
+                    .font(DesignSystem.Typography.readout)
+                    .foregroundStyle(DesignSystem.Colors.success)
+            } else if engine.syncLatencyMilliseconds > 0 {
+                Text("Sync +\(DesignSystem.Delay.formattedMilliseconds(engine.syncLatencyMilliseconds))")
+                    .font(DesignSystem.Typography.readout)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
+            }
+        }
+        .padding(.horizontal, DesignSystem.Spacing.sm)
+        .padding(.vertical, DesignSystem.Spacing.xs)
+        .floatingPill()
+    }
+
+    private var syncEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { engine.syncEnabled },
+            set: { engine.syncEnabled = $0 }
+        )
+    }
+
+    private var autoSyncButton: some View {
+        Button {
+            isCalibrationSheetPresented = true
+        } label: {
+            Label("Auto-Sync", systemImage: "waveform.and.mic")
+        }
+        .buttonStyle(.bordered)
     }
 
     // MARK: - Mixer

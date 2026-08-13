@@ -213,6 +213,14 @@ extension AggregateOutput {
         control.renderCycles.pointee &+= 1
         control.observedOutputBuffers.pointee = Int32(outputBuffers.count)
 
+        // Calibration owns the output entirely while it runs: no tap, no filters, no delay, no
+        // fader. The measurement is only meaningful if what leaves the speaker is the exact signal
+        // being correlated against, and if the delays being measured are not themselves applied.
+        if control.calibration.isActive.pointee == 1 {
+            renderCalibration(outputBuffers: outputBuffers, control: control)
+            return
+        }
+
         // The mutable cast is required by UnsafeMutableAudioBufferListPointer, but the input is
         // owned by Core Audio and only ever read here.
         let inputBuffers = UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: input))
@@ -260,6 +268,7 @@ extension AggregateOutput {
         let coefficients = filters.coefficients
         let filterState = filters.state
         let waveforms = control.waveforms
+        let delays = control.delays
 
         for bufferIndex in 0..<outputBuffers.count {
             let buffer = outputBuffers[bufferIndex]
@@ -305,6 +314,12 @@ extension AggregateOutput {
                                         stateBase: stateBase,
                                         sectionCount: sectionCount)
 
+                // Delay sits after the filters and before the fader, so the meter and waveform show
+                // what the device is actually emitting at this instant rather than what it will
+                // emit once the delay has elapsed.
+                DelayBank.processFrame(left: &left, right: &right,
+                                       bank: delays, deviceIndex: deviceIndex)
+
                 left *= gain
                 right *= gain
 
@@ -332,6 +347,56 @@ extension AggregateOutput {
                devicePeak > control.peaks[deviceIndex] {
                 control.peaks[deviceIndex] = devicePeak
             }
+        }
+    }
+
+    /// RT-SAFE. Plays the scheduled calibration program instead of the tap.
+    private static func renderCalibration(outputBuffers: UnsafeMutableAudioBufferListPointer,
+                                          control: RenderControlBlock) {
+        let player = control.calibration
+        let startPosition = Int(player.position.pointee)
+        let mappedBuffers = Int(control.bufferCount.pointee)
+        var framesAdvanced = 0
+
+        for bufferIndex in 0..<outputBuffers.count {
+            let buffer = outputBuffers[bufferIndex]
+            guard let data = buffer.mData, buffer.mNumberChannels > 0 else { continue }
+
+            let channelCount = Int(buffer.mNumberChannels)
+            let frameCount = Int(buffer.mDataByteSize) / (MemoryLayout<Float>.size * channelCount)
+            let samples = data.assumingMemoryBound(to: Float.self)
+            framesAdvanced = max(framesAdvanced, frameCount)
+
+            guard bufferIndex < mappedBuffers else {
+                memset(data, 0, Int(buffer.mDataByteSize))
+                continue
+            }
+            let deviceIndex = Int(control.bufferToDevice[bufferIndex])
+
+            CalibrationPlayer.render(into: samples,
+                                     frameCount: frameCount,
+                                     channelCount: channelCount,
+                                     deviceIndex: deviceIndex,
+                                     player: player,
+                                     startPosition: startPosition)
+
+            // Keep the meters alive so the user can see which device is currently sounding.
+            var peak: Float = 0
+            for index in 0..<(frameCount * channelCount) {
+                let magnitude = abs(samples[index])
+                if magnitude > peak { peak = magnitude }
+            }
+            if deviceIndex < RenderControlBlock.maxDevices, peak > control.peaks[deviceIndex] {
+                control.peaks[deviceIndex] = peak
+            }
+        }
+
+        // Advance once for the whole callback, not once per buffer — every output stream is
+        // rendering the same slice of the same program timeline.
+        let next = startPosition + framesAdvanced
+        player.position.pointee = Int32(next)
+        if next >= Int(player.programFrames.pointee) {
+            player.isActive.pointee = 0
         }
     }
 

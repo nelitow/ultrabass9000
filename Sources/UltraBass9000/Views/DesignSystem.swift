@@ -104,6 +104,26 @@ enum DesignSystem {
         }
     }
 
+    // MARK: - Delay <-> distance
+
+    /// Shared by `DelayControls`, `DeviceStrip`'s compact strip readout, the
+    /// toolbar's sync-latency pill and `CalibrationSheet`'s result summary, so
+    /// "12.4 ms" is formatted identically everywhere it appears.
+    enum Delay {
+        /// Speed of sound in air (~343 m/s), used only to make a millisecond
+        /// value intuitive as an equivalent listening distance — never fed
+        /// back into `AudioEngine`.
+        static let metresPerMillisecond = 0.343
+
+        static func formattedMilliseconds(_ milliseconds: Double) -> String {
+            String(format: "%.1f ms", milliseconds)
+        }
+
+        static func formattedDistance(_ milliseconds: Double) -> String {
+            String(format: "%.2f m", milliseconds * metresPerMillisecond)
+        }
+    }
+
     // MARK: - Level meter
 
     enum Meter {

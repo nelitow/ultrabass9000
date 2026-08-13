@@ -18,6 +18,7 @@ struct DeviceStrip: View {
             header
             faderSection
             controlsRow
+            delayRow
             Divider()
             processingSection
         }
@@ -87,6 +88,44 @@ struct DeviceStrip: View {
             .tint(engine.isMuted(device.uid) ? DesignSystem.Colors.danger : nil)
             .controlSize(.small)
         }
+    }
+
+    // MARK: - Delay
+
+    /// Compact "12.4 ms" readout, opening the same sheet that hosts EQ and filters — delay lives
+    /// there too, as an additional section. Dimmed to near-invisible at zero so a strip with no
+    /// delay set doesn't compete for attention with the ones that do.
+    private var delayRow: some View {
+        let delay = engine.delay(for: device.uid)
+        return Button {
+            isProcessingSheetPresented = true
+        } label: {
+            HStack(spacing: DesignSystem.Spacing.xxs) {
+                Text(DesignSystem.Delay.formattedMilliseconds(delay.milliseconds))
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                delayMarker(isAutomatic: delay.isAutomatic)
+            }
+            .font(.system(size: 9, design: .monospaced))
+            .foregroundStyle(DesignSystem.Colors.textSecondary)
+            .opacity(delay.milliseconds > 0 ? 1 : 0.4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(delay.isAutomatic ? "Set by acoustic calibration" : "Set manually")
+    }
+
+    /// Single-letter capsule so "came from calibration" vs "hand-set" reads without relying on
+    /// color alone: AUTO fills solid, MANUAL is just an outline.
+    private func delayMarker(isAutomatic: Bool) -> some View {
+        Text(isAutomatic ? "A" : "M")
+            .font(.system(size: 7, weight: .bold, design: .rounded))
+            .frame(width: 11, height: 11)
+            .foregroundStyle(isAutomatic ? .white : DesignSystem.Colors.textSecondary)
+            .background(isAutomatic ? DesignSystem.Colors.accent : Color.clear, in: Circle())
+            .overlay(
+                Circle().strokeBorder(DesignSystem.Colors.hairline, lineWidth: isAutomatic ? 0 : DesignSystem.Metrics.hairlineWidth)
+            )
     }
 
     // MARK: - Processing (waveform / EQ / filters)
@@ -188,10 +227,17 @@ private struct DeviceProcessingSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.lg) {
-            EQEditor(device: device)
-            Divider()
-            FilterControls(device: device)
-            Spacer(minLength: 0)
+            // Scrollable so adding the Delay section doesn't force the sheet to grow without bound
+            // or clip content when resized down; Reset/Done stay pinned below, out of the scroll.
+            ScrollView {
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.lg) {
+                    EQEditor(device: device)
+                    Divider()
+                    FilterControls(device: device)
+                    Divider()
+                    DelayControls(device: device)
+                }
+            }
             HStack {
                 Button("Reset Device") {
                     engine.resetProcessing(for: device.uid)
@@ -204,7 +250,7 @@ private struct DeviceProcessingSheet: View {
             }
         }
         .padding(DesignSystem.Spacing.lg)
-        .frame(minWidth: 560, idealWidth: 620, minHeight: 640, idealHeight: 720)
+        .frame(minWidth: 560, idealWidth: 620, minHeight: 640, idealHeight: 780)
     }
 }
 

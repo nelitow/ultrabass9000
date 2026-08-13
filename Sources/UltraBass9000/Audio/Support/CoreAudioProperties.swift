@@ -50,14 +50,30 @@ extension AudioObjectID {
     }
 
     /// Reads a single fixed-layout value. Allocates with `T`'s alignment so `load(as:)` is legal.
+    ///
+    /// The size check is not paranoia. `T` is inferred from the call site, and an expression like
+    /// `let id: AudioDeviceID? = try? object.read(address)` infers `T == AudioDeviceID?` — eight
+    /// bytes — while the HAL writes four. Without this check the upper half is whatever the
+    /// allocator handed back, and the result is a plausible-looking device ID that does not exist.
     func read<T>(_ address: AudioObjectPropertyAddress, as type: T.Type = T.self) throws -> T {
         var address = address
-        var size = UInt32(MemoryLayout<T>.size)
-        let buffer = UnsafeMutableRawPointer.allocate(byteCount: Int(size),
+        let expected = MemoryLayout<T>.size
+        var size = UInt32(expected)
+        let buffer = UnsafeMutableRawPointer.allocate(byteCount: expected,
                                                       alignment: MemoryLayout<T>.alignment)
         defer { buffer.deallocate() }
+        buffer.initializeMemory(as: UInt8.self, repeating: 0, count: expected)
+
         try caTry("AudioObjectGetPropertyData(\(address.mSelector.fourCC))",
                   AudioObjectGetPropertyData(self, &address, 0, nil, &size, buffer))
+        guard Int(size) == expected else {
+            throw CoreAudioError(
+                operation: """
+                    AudioObjectGetPropertyData(\(address.mSelector.fourCC)) wrote \(size) bytes \
+                    into a \(expected)-byte \(T.self) — the requested type does not match the property
+                    """,
+                status: kAudioHardwareBadPropertySizeError)
+        }
         return buffer.load(as: T.self)
     }
 

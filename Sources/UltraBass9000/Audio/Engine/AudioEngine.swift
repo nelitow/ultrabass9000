@@ -17,6 +17,31 @@ enum EngineStatus: Equatable {
     }
 }
 
+/// How long one device is held back so it lines up with the slowest one.
+struct DeviceDelay: Codable, Equatable {
+    var milliseconds: Double = 0
+    /// True when the value came from acoustic calibration rather than being dialled in by hand.
+    var isAutomatic: Bool = false
+
+    static let none = DeviceDelay()
+}
+
+enum CalibrationState: Equatable {
+    case idle
+    case preparing
+    case measuring(deviceName: String, index: Int, total: Int)
+    case analysing
+    case failed(String)
+    case succeeded(alignedDeviceCount: Int, spreadMilliseconds: Double, skipped: [String])
+
+    var isRunning: Bool {
+        switch self {
+        case .preparing, .measuring, .analysing: return true
+        case .idle, .failed, .succeeded: return false
+        }
+    }
+}
+
 /// Non-fatal conditions worth surfacing rather than logging into the void.
 enum EngineDiagnostic: Equatable, Identifiable {
     /// The tap has produced nothing but digital silence for long enough that a denied
@@ -108,6 +133,9 @@ final class AudioEngine {
     private var deviceGains: [String: Float] = [:]
     private var deviceMutes: [String: Bool] = [:]
     private var deviceProcessing: [String: DeviceProcessing] = [:]
+    private var deviceDelays: [String: DeviceDelay] = [:]
+    private var activeCalibrator: AcousticCalibrator?
+    private var calibrationTask: Task<Void, Never>?
     private var sampleRate: Double = 48_000
     private var layoutVerified = false
     private var meterLogTicks = 0
@@ -126,7 +154,14 @@ final class AudioEngine {
         // engine up against the persisted selection without a click, so the Core Audio path can be
         // exercised from a script. Does nothing unless the flag is passed.
         if defaults.bool(forKey: "UB9KAutoStart") {
-            Task { @MainActor [weak self] in self?.start() }
+            Task { @MainActor [weak self] in
+                self?.start()
+                // `-UB9KCalibrate YES` additionally runs one acoustic measurement and logs it, so
+                // the whole calibration path can be exercised from a script.
+                guard self?.defaults.bool(forKey: "UB9KCalibrate") == true else { return }
+                try? await Task.sleep(for: .seconds(2))
+                self?.startCalibration()
+            }
         }
     }
 
@@ -215,6 +250,128 @@ final class AudioEngine {
     /// rate, so what is drawn is what is heard rather than an idealised approximation.
     func magnitudeResponse(for uid: String, at frequencies: [Double]) -> [Double] {
         processing(for: uid).magnitudeResponse(at: frequencies, sampleRate: sampleRate)
+    }
+
+    // MARK: - Delay and synchronisation
+
+    /// Master switch. Off means every delay line is bypassed and the app runs at its lowest latency.
+    var syncEnabled: Bool = true {
+        didSet {
+            guard syncEnabled != oldValue else { return }
+            applyDelays()
+            persist()
+        }
+    }
+
+    /// The largest delay currently in effect — the latency that being in sync costs everything.
+    ///
+    /// Surfaced rather than hidden because it is the real trade-off of this feature: aligning to a
+    /// pair of AirPods can put a fifth of a second between a key press and its sound.
+    var syncLatencyMilliseconds: Double {
+        guard syncEnabled, let plan else { return 0 }
+        return plan.subDevices.map { deviceDelays[$0.uid]?.milliseconds ?? 0 }.max() ?? 0
+    }
+
+    /// Upper bound on a single delay, which shrinks as the sample rate rises because the delay
+    /// buffer is a fixed number of frames.
+    var maximumDelayMilliseconds: Double {
+        min(500, DelayBank.maximumDelaySeconds(sampleRate: sampleRate) * 1000)
+    }
+
+    func delay(for uid: String) -> DeviceDelay { deviceDelays[uid] ?? .none }
+
+    func setDelayMilliseconds(_ milliseconds: Double, for uid: String) {
+        let clamped = min(max(0, milliseconds), maximumDelayMilliseconds)
+        deviceDelays[uid] = DeviceDelay(milliseconds: clamped, isAutomatic: false)
+        applyDelays()
+        persist()
+    }
+
+    func clearDelay(for uid: String) {
+        deviceDelays[uid] = nil
+        applyDelays()
+        persist()
+    }
+
+    /// Pushes the stored delays to the render thread.
+    ///
+    /// `immediately` skips the click-avoiding fade, which is only safe when no audio is flowing —
+    /// at activation, where the lines are empty anyway.
+    private func applyDelays(immediately: Bool = false) {
+        guard let plan else { return }
+        for (index, subDevice) in plan.subDevices.enumerated() where index < DelayBank.maxDevices {
+            let milliseconds = syncEnabled ? (deviceDelays[subDevice.uid]?.milliseconds ?? 0) : 0
+            let frames = Int((milliseconds / 1000) * sampleRate)
+            if immediately {
+                control.delays.setDelayImmediately(frames: frames, deviceIndex: index)
+            } else {
+                control.delays.setDelay(frames: frames, deviceIndex: index)
+            }
+        }
+    }
+
+    // MARK: - Acoustic calibration
+
+    private(set) var calibration: CalibrationState = .idle
+
+    func startCalibration() {
+        guard !calibration.isRunning else { return }
+        guard let plan else {
+            calibration = .failed(AcousticCalibrator.CalibrationError.engineNotRunning.localizedDescription)
+            return
+        }
+
+        let devices = plan.subDevices.map { subDevice -> (uid: String, name: String) in
+            (subDevice.uid, registry.device(uid: subDevice.uid)?.name ?? subDevice.uid)
+        }
+        let total = devices.count
+        let calibrator = AcousticCalibrator(control: control)
+        activeCalibrator = calibrator
+        calibration = .preparing
+        logger.info("Calibration requested for \(devices.map(\.name), privacy: .public)")
+
+        calibrationTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                let outcome = try await calibrator.run(
+                    devices: devices,
+                    playbackSampleRate: self.sampleRate,
+                    isEngineRunning: self.status == .running,
+                    onProgress: { index, name in
+                        Task { @MainActor [weak self] in
+                            self?.calibration = .measuring(deviceName: name, index: index, total: total)
+                        }
+                    })
+                self.calibration = .analysing
+                self.apply(outcome: outcome)
+            } catch {
+                self.logger.error("Calibration failed: \(error.localizedDescription, privacy: .public)")
+                self.calibration = .failed(error.localizedDescription)
+            }
+            self.activeCalibrator = nil
+        }
+    }
+
+    func cancelCalibration() {
+        activeCalibrator?.cancel()
+        calibrationTask?.cancel()
+        calibrationTask = nil
+        activeCalibrator = nil
+        if calibration.isRunning { calibration = .idle }
+    }
+
+    private func apply(outcome: AcousticCalibrator.Outcome) {
+        for measurement in outcome.succeeded {
+            deviceDelays[measurement.uid] = DeviceDelay(
+                milliseconds: min(measurement.delaySeconds * 1000, maximumDelayMilliseconds),
+                isAutomatic: true)
+        }
+        applyDelays()
+        persist()
+
+        calibration = .succeeded(alignedDeviceCount: outcome.succeeded.count,
+                                 spreadMilliseconds: outcome.spreadSeconds * 1000,
+                                 skipped: outcome.skipped.map(\.deviceName))
     }
 
     /// Compiles every active device's chain and hands the whole set to the render thread at once.
@@ -330,6 +487,7 @@ final class AudioEngine {
             control.setMuted(deviceMutes[subDevice.uid] ?? false, deviceIndex: index)
         }
         publishFilters()
+        applyDelays(immediately: true)
     }
 
     private func deviceIndex(for uid: String) -> Int? {
@@ -435,6 +593,8 @@ final class AudioEngine {
         static let masterGain = "masterGain"
         static let masterMuted = "masterMuted"
         static let processing = "deviceProcessing"
+        static let delays = "deviceDelays"
+        static let syncEnabled = "syncEnabled"
     }
 
     /// Suppresses writes while `restore()` is assigning to observed properties.
@@ -455,6 +615,10 @@ final class AudioEngine {
         if let encoded = try? JSONEncoder().encode(deviceProcessing) {
             defaults.set(encoded, forKey: Key.processing)
         }
+        if let encoded = try? JSONEncoder().encode(deviceDelays) {
+            defaults.set(encoded, forKey: Key.delays)
+        }
+        defaults.set(syncEnabled, forKey: Key.syncEnabled)
     }
 
     private func restore() {
@@ -475,5 +639,12 @@ final class AudioEngine {
            let decoded = try? JSONDecoder().decode([String: DeviceProcessing].self, from: data) {
             deviceProcessing = decoded.mapValues(\.normalised)
         }
+        if let data = defaults.data(forKey: Key.delays),
+           let decoded = try? JSONDecoder().decode([String: DeviceDelay].self, from: data) {
+            deviceDelays = decoded
+        }
+        syncEnabled = defaults.object(forKey: Key.syncEnabled) == nil
+            ? true
+            : defaults.bool(forKey: Key.syncEnabled)
     }
 }
